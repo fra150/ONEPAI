@@ -1,0 +1,14 @@
+# -----------------------------------------------------------------------------
+# File: requirements.txt
+# -----------------------------------------------------------------------------
+
+# Dipendenze di base per ONEPAI Core
+
+# Per checksum ad alta velocità
+py-blake3==0.3.1
+
+# Per la cifratura AES-GCM
+pycryptodome==3.15.0
+
+# Per la compressione Zstandard
+zstandard==0.18.0
