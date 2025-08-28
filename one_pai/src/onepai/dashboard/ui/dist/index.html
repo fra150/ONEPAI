@@ -1,0 +1,40 @@
+# -----------------------------------------------------------------------------
+# File: onepai/memory/__init__.py
+# -----------------------------------------------------------------------------
+
+"""
+Modulo Memoria ONEPAI
+====================
+
+Sistema di gestione della memoria per l'intelligenza ombra, includendo:
+- Registro delle azioni non compiute (undone_registry)
+- Archivio del non-detto (unsaid_vault)
+- Spazio del non-pensato (unthought_space)
+
+Author: Francesco Bulla (Brainverse)
+"""
+
+from .undone_registry import UndoneRegistry, UndoneAction
+from .unsaid_vault import UnsaidVault, UnsaidItem
+from .unthought_space import UnthoughtSpace, UnthoughtConcept
+
+__version__ = "1.0.0"
+__author__ = "Francesco Bulla (Brainverse)"
+__description__ = "Sistema di gestione della memoria per l'intelligenza ombra ONEPAI"
+
+__all__ = [
+    # Classi principali
+    'UndoneRegistry',
+    'UnsaidVault', 
+    'UnthoughtSpace',
+    
+    # Strutture dati
+    'UndoneAction',
+    'UnsaidItem',
+    'UnthoughtConcept',
+    
+    # Metadati
+    '__version__',
+    '__author__',
+    '__description__'
+]
