@@ -1,0 +1,25 @@
+
+.gstack/
+
+# Personal / session notes (not project docs)
+onepaicosafatto.md
+vero.md
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Data caches / generated artifacts
+data/corpus/*.json
+wandb/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

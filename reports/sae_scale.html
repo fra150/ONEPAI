@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ONEPAI · SAE at Scale + Dual Interpretation</title>
+  <style>
+:root {
+  --bg-0:#04060d; --bg-1:#070b16; --panel:rgba(16,22,40,0.55);
+  --panel-solid:#0b1120; --brd:rgba(120,165,255,0.16); --brd-glow:rgba(80,200,255,0.40);
+  --cyan:#38e1ff; --violet:#a274ff; --green:#3df5a6; --amber:#ffb74a; --red:#ff5d72;
+  --ghost:#8090b0; --text:#dfe8ff; --muted:#8493b8; --mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { scroll-behavior:smooth; }
+body { font-family:var(--sans); background:var(--bg-0); color:var(--text);
+  font-size:14px; line-height:1.55; -webkit-font-smoothing:antialiased; overflow-x:hidden; }
+body::before { content:""; position:fixed; inset:0; z-index:-2;
+  background:
+    radial-gradient(1200px 700px at 78% -8%, rgba(60,120,255,0.10), transparent 60%),
+    radial-gradient(900px 600px at 8% 108%, rgba(150,90,255,0.10), transparent 55%),
+    var(--bg-0);
+  background-attachment:fixed; }
+#bg-canvas { position:fixed; inset:0; z-index:-1; opacity:0.55; }
+.scanlines { position:fixed; inset:0; z-index:1; pointer-events:none; opacity:0.35;
+  background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,0.18) 3px); }
+a { color:var(--cyan); text-decoration:none; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+
+/* status bar */
+#statusbar { position:fixed; top:0; left:0; right:0; height:36px; z-index:200;
+  display:flex; align-items:center; gap:16px; padding:0 18px;
+  background:rgba(6,10,20,0.82); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--brd); font-family:var(--mono); font-size:11px; letter-spacing:0.08em; }
+#statusbar .live-dot { width:8px; height:8px; border-radius:50%; background:var(--green);
+  box-shadow:0 0 10px var(--green); animation:pulse 1.8s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.45;transform:scale(0.7);} }
+#statusbar .sb-brand { color:var(--cyan); font-weight:500; text-shadow:0 0 14px rgba(56,225,255,0.6); }
+#statusbar .sb-sep { color:var(--muted); }
+#statusbar .sb-meta { color:var(--muted); }
+#statusbar #clock { margin-left:auto; color:var(--text); }
+
+/* sidebar */
+#sidebar { position:fixed; top:36px; left:0; bottom:0; width:240px; z-index:100; overflow-y:auto;
+  background:rgba(7,11,22,0.62); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border-right:1px solid var(--brd); padding-bottom:30px; }
+#sidebar .brand-block { padding:22px 20px 16px; border-bottom:1px solid var(--brd); }
+#sidebar .brand-glyph { font-family:var(--mono); font-size:26px; color:var(--cyan);
+  text-shadow:0 0 18px rgba(56,225,255,0.7); animation:spin 9s linear infinite; display:inline-block; }
+@keyframes spin { to { transform:rotate(360deg); } }
+#sidebar .brand-name { font-size:15px; font-weight:500; letter-spacing:0.22em; margin-top:6px; }
+#sidebar .brand-sub { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:0.18em; margin-top:3px; }
+#sidebar nav { padding:12px 0; }
+#sidebar nav a { display:flex; align-items:center; gap:11px; padding:10px 20px; color:var(--muted);
+  font-size:12.5px; border-left:2px solid transparent; transition:all .18s; position:relative; }
+#sidebar nav a .nav-ix { font-family:var(--mono); font-size:10px; color:var(--brd-glow); min-width:22px; }
+#sidebar nav a:hover { color:var(--text); background:rgba(56,225,255,0.05); }
+#sidebar nav a.active { color:var(--cyan); background:rgba(56,225,255,0.08);
+  border-left-color:var(--cyan); box-shadow:inset 0 0 22px rgba(56,225,255,0.08); }
+#sidebar nav a.active .nav-ix { color:var(--cyan); }
+
+/* main */
+#main { margin-left:240px; padding:60px 40px 80px; max-width:1180px; position:relative; z-index:2; }
+.hero { margin-bottom:30px; }
+.hero h1 { font-size:27px; font-weight:500; letter-spacing:0.01em;
+  text-shadow:0 0 26px rgba(56,225,255,0.25); }
+.hero h1 .accent { color:var(--cyan); }
+.hero .boot { font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:9px;
+  border-left:2px solid var(--cyan); padding-left:11px; min-height:17px; }
+.hero .boot .ok { color:var(--green); }
+
+/* cards */
+.cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(176px,1fr)); gap:14px; margin-bottom:30px; }
+.card { position:relative; background:var(--panel); border:1px solid var(--brd); border-radius:12px;
+  padding:18px 16px 16px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); overflow:hidden; }
+.card::before { content:""; position:absolute; top:0; left:0; right:0; height:2px;
+  background:var(--cyan); box-shadow:0 0 16px var(--cyan); opacity:0.9; }
+.card.c-danger::before { background:var(--red); box-shadow:0 0 16px var(--red); }
+.card.c-warn::before { background:var(--amber); box-shadow:0 0 16px var(--amber); }
+.card.c-ok::before { background:var(--green); box-shadow:0 0 16px var(--green); }
+.card.c-violet::before { background:var(--violet); box-shadow:0 0 16px var(--violet); }
+.card .card-value { font-family:var(--mono); font-size:30px; font-weight:500; line-height:1;
+  color:var(--text); text-shadow:0 0 18px rgba(120,180,255,0.25); }
+.card .card-label { font-size:10.5px; color:var(--muted); margin-top:9px;
+  text-transform:uppercase; letter-spacing:0.12em; }
+.card .card-corner { position:absolute; bottom:8px; right:10px; font-family:var(--mono);
+  font-size:9px; color:var(--brd-glow); opacity:0.7; }
+
+/* sections */
+.section { background:var(--panel); border:1px solid var(--brd); border-radius:14px;
+  margin-bottom:22px; overflow:hidden; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  opacity:0; transform:translateY(18px); transition:opacity .6s ease, transform .6s ease; position:relative; }
+.section.visible { opacity:1; transform:translateY(0); }
+.section::before, .section::after { content:""; position:absolute; width:14px; height:14px; pointer-events:none; opacity:0.6; }
+.section::before { top:8px; left:8px; border-top:1.5px solid var(--brd-glow); border-left:1.5px solid var(--brd-glow); }
+.section::after { bottom:8px; right:8px; border-bottom:1.5px solid var(--brd-glow); border-right:1.5px solid var(--brd-glow); }
+.section-header { padding:15px 22px; cursor:pointer; display:flex; align-items:center; gap:13px;
+  border-bottom:1px solid var(--brd); user-select:none; transition:background .18s; }
+.section-header:hover { background:rgba(56,225,255,0.04); }
+.section-header .sx { font-family:var(--mono); font-size:11px; color:var(--cyan); letter-spacing:0.1em; }
+.section-header .icon { font-size:17px; filter:drop-shadow(0 0 8px rgba(56,225,255,0.5)); }
+.section-header h2 { font-size:16px; font-weight:500; flex:1; letter-spacing:0.01em; }
+.section-header .toggle { font-family:var(--mono); font-size:11px; color:var(--muted); }
+.section-body { padding:22px; overflow-x:auto; }
+.section-body.collapsed { display:none; }
+.svg-wrap { overflow-x:auto; }
+.svg-wrap svg { max-width:100%; height:auto; display:block; }
+
+/* note */
+.note { background:rgba(56,225,255,0.06); border-left:2px solid var(--cyan); padding:10px 15px;
+  font-size:12.5px; color:var(--text); border-radius:0 7px 7px 0; margin-bottom:15px; line-height:1.6; }
+
+/* tables */
+table { width:100%; border-collapse:collapse; font-size:12.5px; font-family:var(--mono); }
+th { padding:10px 13px; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.1em;
+  color:var(--cyan); border-bottom:1px solid var(--brd-glow); background:rgba(56,225,255,0.04); }
+td { padding:9px 13px; border-bottom:1px solid rgba(120,165,255,0.07); color:var(--text); }
+tr:hover td { background:rgba(56,225,255,0.04); }
+.badge { display:inline-block; padding:2px 9px; border-radius:20px; font-size:10px; font-weight:500;
+  font-family:var(--mono); letter-spacing:0.04em; }
+.badge-ghost { background:rgba(128,144,176,0.16); color:#aab6d4; border:1px solid rgba(128,144,176,0.35); }
+.badge-shadow { background:rgba(255,183,74,0.13); color:var(--amber); border:1px solid rgba(255,183,74,0.4); }
+.badge-dead { background:rgba(255,93,114,0.13); color:var(--red); border:1px solid rgba(255,93,114,0.42); }
+.badge-active { background:rgba(61,245,166,0.12); color:var(--green); border:1px solid rgba(61,245,166,0.4); }
+
+/* footer */
+.foot { margin-top:34px; padding-top:18px; border-top:1px solid var(--brd);
+  font-family:var(--mono); font-size:10.5px; color:var(--muted); letter-spacing:0.08em;
+  display:flex; gap:14px; flex-wrap:wrap; }
+.foot .ok { color:var(--green); }
+
+@media (max-width:820px) {
+  #sidebar { display:none; }
+  #main { margin-left:0; padding:54px 16px 60px; }
+}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+<div class="scanlines" aria-hidden="true"></div>
+<h2 class="sr-only">ONEPAI · SAE at Scale + Dual Interpretation: report di introspezione del modello gpt2 / wikitext-2.</h2>
+
+<header id="statusbar">
+  <span class="live-dot" aria-hidden="true"></span>
+  <span class="sb-brand">ONEPAI</span>
+  <span class="sb-sep">//</span>
+  <span class="sb-meta">neural observatory</span>
+  <span class="sb-sep">//</span>
+  <span class="sb-meta">target: gpt2 / wikitext-2</span>
+  <span id="clock">--:--:-- UTC</span>
+</header>
+
+<aside id="sidebar">
+  <div class="brand-block">
+    <span class="brand-glyph" aria-hidden="true">◈</span>
+    <div class="brand-name">ONEPAI</div>
+    <div class="brand-sub">INTROSPECTION v0.2</div>
+  </div>
+  <nav><a href="#setup"><span class="nav-ix">01</span><span class="icon" aria-hidden="true">◈</span>Setup</a>
+<a href="##1-·-feature-525"><span class="nav-ix">02</span><span class="icon" aria-hidden="true">◌</span>#1 · Feature 525</a>
+<a href="##2-·-feature-773"><span class="nav-ix">03</span><span class="icon" aria-hidden="true">◌</span>#2 · Feature 773</a>
+<a href="##3-·-feature-1228"><span class="nav-ix">04</span><span class="icon" aria-hidden="true">◌</span>#3 · Feature 1228</a>
+<a href="##4-·-feature-1652"><span class="nav-ix">05</span><span class="icon" aria-hidden="true">◌</span>#4 · Feature 1652</a>
+<a href="##5-·-feature-1594"><span class="nav-ix">06</span><span class="icon" aria-hidden="true">◌</span>#5 · Feature 1594</a></nav>
+</aside>
+
+<main id="main">
+  <div class="hero">
+    <h1>ONEPAI · SAE at Scale + Dual Interpretation</h1>
+    <div class="boot" id="boot" data-msg="initializing shadow map :: tracing silence :: target=gpt2 / wikitext-2 :: 6 modules online"></div>
+  </div>
+  <div class="cards"><div class="card c-ok"><span class="card-value" data-count="29078.0" data-dec="0">0</span><div class="card-label">Corpus tokens</div><div class="card-corner">#01</div></div><div class="card "><span class="card-value" data-count="2048.0" data-dec="0">0</span><div class="card-label">SAE features</div><div class="card-corner">#02</div></div><div class="card "><span class="card-value" data-count="983.0" data-dec="0">0</span><div class="card-label">Live</div><div class="card-corner">#03</div></div><div class="card c-danger"><span class="card-value" data-count="1065.0" data-dec="0">0</span><div class="card-label">Dead</div><div class="card-corner">#04</div></div><div class="card "><span class="card-value" data-count="4.4" data-dec="1">0</span><div class="card-label">Mean L0</div><div class="card-corner">#05</div></div><div class="card "><span class="card-value" data-count="0.56" data-dec="2">0</span><div class="card-label">Variance expl.</div><div class="card-corner">#06</div></div></div>
+  
+<div class="section" id="setup">
+  <div class="section-header">
+    <span class="sx">§01</span>
+    <span class="icon" aria-hidden="true">◈</span>
+    <h2>Setup</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    
+    <div class="svg-wrap"><p style='font-size:13.5px;line-height:1.7'>SAE addestrata su testo Wikipedia reale (wikitext-2), non su frasi-template. Ogni feature soppressa è interpretata con due lenti indipendenti: la proiezione sull'unembedding (cosa <i>scrive</i>) e i max-activating examples sul corpus (quando <i>si accende</i>). Concordanza → monosemanticità.</p></div>
+  </div>
+</div>
+<div class="section" id="#1-·-feature-525">
+  <div class="section-header">
+    <span class="sx">§02</span>
+    <span class="icon" aria-hidden="true">◌</span>
+    <h2>#1 · Feature 525</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    
+    <div class="svg-wrap"><div class='note'>peak 17.7 @ layer 10 → 0.0 all'output (crush 17.7) · firing rate sul corpus: 0.9%</div><p style='font-family:var(--mono);font-size:12.5px;color:var(--cyan);margin:10px 0'>lente unembed → ' not' · 'senal' · 'omorph' · 'omorphic' · ' currently' · ' usually' · ' definitely' · ' also'</p><table><thead><tr><th>act</th><th>max-activating example (wikitext)</th></tr></thead><tbody><tr><td style='font-family:var(--mono);font-size:11px'>11.9</td><td style='font-size:12px'> affiliated with FIFA in 1968 . Football[[ is]] the most popular women 's sport</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>10.9</td><td style='font-size:12px'> ( Little Rock ) . The arsenal[[ is]] one of the richest</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>10.6</td><td style='font-size:12px'> . The Æsthetic Club[[ is]] still headquartered in the</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>10.3</td><td style='font-size:12px'> " Summary " for August , 1863[[ is]] the ominous notation , " During the</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>10.2</td><td style='font-size:12px'> being available for purchase . The anime[[ is]] set during the latter half of V</td></tr></tbody></table><div class='svg-wrap' style='margin-top:14px'><svg xmlns="http://www.w3.org/2000/svg" width="700" height="220" font-family="ui-monospace, monospace" font-size="11">
+<defs><filter id="lglow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="700" height="220" fill="none" rx="4"/>
+<text x="350" y="22" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Activation across layers — prompt: 'The capital of France is'</text>
+<line x1="55" y1="40.0" x2="580" y2="40.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="44.0" text-anchor="end" fill="#7c89a8" font-size="9">17.74</text>
+<line x1="55" y1="75.0" x2="580" y2="75.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="79.0" text-anchor="end" fill="#7c89a8" font-size="9">13.30</text>
+<line x1="55" y1="110.0" x2="580" y2="110.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="114.0" text-anchor="end" fill="#7c89a8" font-size="9">8.87</text>
+<line x1="55" y1="145.0" x2="580" y2="145.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="149.0" text-anchor="end" fill="#7c89a8" font-size="9">4.43</text>
+<line x1="55" y1="180.0" x2="580" y2="180.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="184.0" text-anchor="end" fill="#7c89a8" font-size="9">-0.00</text>
+<line x1="55" y1="40" x2="55" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<line x1="55" y1="180" x2="580" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<text x="13" y="110" text-anchor="middle" transform="rotate(-90 13 110)" fill="#8493b8" font-size="10">activation</text>
+<text x="317" y="215" text-anchor="middle" fill="#8493b8" font-size="10">layer</text>
+<path d="M 55.0 177.9 L 102.7 161.6 L 150.5 159.5 L 198.2 153.2 L 245.9 142.4 L 293.6 133.8 L 341.4 128.2 L 389.1 102.6 L 436.8 74.9 L 484.5 62.2 L 532.3 40.0 L 580.0 180.0" fill="none" stroke="#38e1ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="177.9" r="3" fill="#38e1ff" opacity="0.7"><title>feature #525: x=0.00, y=0.2659</title></circle>
+<circle cx="102.7" cy="161.6" r="3" fill="#38e1ff" opacity="0.7"><title>feature #525: x=1.00, y=2.3281</title></circle>
+<circle cx="150.5" cy="159.5" r="3" fill="#38e1ff" opacity="0.7"><title>feature #525: x=2.00, y=2.6027</title></circle>
+<circle cx="198.2" cy="153.2" r="3" fill="#38e1ff" opacity="0.7"><title>feature #525: x=3.00, y=3.3914</title></circle>
+<circle cx="245.9" cy="142.4" r="3" fill="#38e1ff" opacity="0.7"><title>feature #525: x=4.00, y=4.7636</title></circle>
+<circle cx="293.6" cy="133.8" r="3" fill="#38e1ff" opacity="0.7"><title>feature #525: x=5.00, y=5.8545</title></circle>
+<circle cx="341.4" cy="128.2" r="3" fill="#38e1ff" opacity="0.7"><title>feature #525: x=6.00, y=6.5661</title></circle>
+<circle cx="389.1" cy="102.6" r="3" fill="#38e1ff" opacity="0.7"><title>feature #525: x=7.00, y=9.8045</title></circle>
+<circle cx="436.8" cy="74.9" r="3" fill="#38e1ff" opacity="0.7"><title>feature #525: x=8.00, y=13.3174</title></circle>
+<circle cx="484.5" cy="62.2" r="3" fill="#38e1ff" opacity="0.7"><title>feature #525: x=9.00, y=14.9274</title></circle>
+<circle cx="532.3" cy="40.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #525: x=10.00, y=17.7366</title></circle>
+<circle cx="580.0" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #525: x=11.00, y=0.0000</title></circle>
+<line x1="590" y1="46" x2="608" y2="46" stroke="#38e1ff" stroke-width="2"/>
+<text x="612" y="50" fill="#aeb9d6" font-size="9">feature #525</text>
+</svg></div></div>
+  </div>
+</div>
+<div class="section" id="#2-·-feature-773">
+  <div class="section-header">
+    <span class="sx">§03</span>
+    <span class="icon" aria-hidden="true">◌</span>
+    <h2>#2 · Feature 773</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    
+    <div class="svg-wrap"><div class='note'>peak 14.2 @ layer 10 → 0.0 all'output (crush 14.2) · firing rate sul corpus: 0.5%</div><p style='font-family:var(--mono);font-size:12.5px;color:var(--cyan);margin:10px 0'>lente unembed → 'realDonaldTrump' · '#$' · 'Home' · 'wcsstore' · 'home' · '@@@@@@@@' · 'MIN' · 'roc'</p><table><thead><tr><th>act</th><th>max-activating example (wikitext)</th></tr></thead><tbody><tr><td style='font-family:var(--mono);font-size:11px'>24.3</td><td style='font-size:12px'> 1[[ @]],@ 000 men , with a</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>24.3</td><td style='font-size:12px'> 1[[ @]].@ 3 times longer than wide</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>23.4</td><td style='font-size:12px'> 3[[ @]]-@ 0 in Banjul</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>14.8</td><td style='font-size:12px'> Queen Mary for ₤ 5[[ @]].@ 5 @.@ 0</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>12.8</td><td style='font-size:12px'> and won 2[[ @]]-@ 1 in Tunisia . Ad</td></tr></tbody></table><div class='svg-wrap' style='margin-top:14px'><svg xmlns="http://www.w3.org/2000/svg" width="700" height="220" font-family="ui-monospace, monospace" font-size="11">
+<defs><filter id="lglow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="700" height="220" fill="none" rx="4"/>
+<text x="350" y="22" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Activation across layers — prompt: 'The capital of France is'</text>
+<line x1="55" y1="40.0" x2="580" y2="40.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="44.0" text-anchor="end" fill="#7c89a8" font-size="9">14.24</text>
+<line x1="55" y1="75.0" x2="580" y2="75.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="79.0" text-anchor="end" fill="#7c89a8" font-size="9">10.68</text>
+<line x1="55" y1="110.0" x2="580" y2="110.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="114.0" text-anchor="end" fill="#7c89a8" font-size="9">7.12</text>
+<line x1="55" y1="145.0" x2="580" y2="145.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="149.0" text-anchor="end" fill="#7c89a8" font-size="9">3.56</text>
+<line x1="55" y1="180.0" x2="580" y2="180.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="184.0" text-anchor="end" fill="#7c89a8" font-size="9">-0.00</text>
+<line x1="55" y1="40" x2="55" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<line x1="55" y1="180" x2="580" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<text x="13" y="110" text-anchor="middle" transform="rotate(-90 13 110)" fill="#8493b8" font-size="10">activation</text>
+<text x="317" y="215" text-anchor="middle" fill="#8493b8" font-size="10">layer</text>
+<path d="M 55.0 180.0 L 102.7 180.0 L 150.5 180.0 L 198.2 180.0 L 245.9 180.0 L 293.6 180.0 L 341.4 180.0 L 389.1 180.0 L 436.8 155.9 L 484.5 108.2 L 532.3 40.0 L 580.0 180.0" fill="none" stroke="#38e1ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #773: x=0.00, y=0.0000</title></circle>
+<circle cx="102.7" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #773: x=1.00, y=0.0000</title></circle>
+<circle cx="150.5" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #773: x=2.00, y=0.0000</title></circle>
+<circle cx="198.2" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #773: x=3.00, y=0.0000</title></circle>
+<circle cx="245.9" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #773: x=4.00, y=0.0000</title></circle>
+<circle cx="293.6" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #773: x=5.00, y=0.0000</title></circle>
+<circle cx="341.4" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #773: x=6.00, y=0.0000</title></circle>
+<circle cx="389.1" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #773: x=7.00, y=0.0000</title></circle>
+<circle cx="436.8" cy="155.9" r="3" fill="#38e1ff" opacity="0.7"><title>feature #773: x=8.00, y=2.4477</title></circle>
+<circle cx="484.5" cy="108.2" r="3" fill="#38e1ff" opacity="0.7"><title>feature #773: x=9.00, y=7.3030</title></circle>
+<circle cx="532.3" cy="40.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #773: x=10.00, y=14.2430</title></circle>
+<circle cx="580.0" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #773: x=11.00, y=0.0000</title></circle>
+<line x1="590" y1="46" x2="608" y2="46" stroke="#38e1ff" stroke-width="2"/>
+<text x="612" y="50" fill="#aeb9d6" font-size="9">feature #773</text>
+</svg></div></div>
+  </div>
+</div>
+<div class="section" id="#3-·-feature-1228">
+  <div class="section-header">
+    <span class="sx">§04</span>
+    <span class="icon" aria-hidden="true">◌</span>
+    <h2>#3 · Feature 1228</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    
+    <div class="svg-wrap"><div class='note'>peak 16.0 @ layer 10 → 2.4 all'output (crush 13.5) · firing rate sul corpus: 0.1%</div><p style='font-family:var(--mono);font-size:12.5px;color:var(--cyan);margin:10px 0'>lente unembed → '\\-' · '#$' · 'north' · '�' · 'home' · 'alm' · 'lat' · 'ober'</p><table><thead><tr><th>act</th><th>max-activating example (wikitext)</th></tr></thead><tbody><tr><td style='font-family:var(--mono);font-size:11px'>11.6</td><td style='font-size:12px'> 2010 . It was developed by A[[ @]]-@ 1</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>4.4</td><td style='font-size:12px'> . Kate Greenaway and the Pre[[ @]]-@ Raphaelites were</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>3.6</td><td style='font-size:12px'> clades , suggesting that N.[[ annot]]ata is a cryptic species complex .</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>3.5</td><td style='font-size:12px'> . The divergence of the N.[[ annot]]ata lineage was estimated to have occurred</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>3.2</td><td style='font-size:12px'> in the African Women 's U[[ @]]-@ 19 Championship in 2002 .</td></tr></tbody></table><div class='svg-wrap' style='margin-top:14px'><svg xmlns="http://www.w3.org/2000/svg" width="700" height="220" font-family="ui-monospace, monospace" font-size="11">
+<defs><filter id="lglow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="700" height="220" fill="none" rx="4"/>
+<text x="350" y="22" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Activation across layers — prompt: 'The capital of France is'</text>
+<line x1="55" y1="40.0" x2="580" y2="40.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="44.0" text-anchor="end" fill="#7c89a8" font-size="9">15.99</text>
+<line x1="55" y1="75.0" x2="580" y2="75.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="79.0" text-anchor="end" fill="#7c89a8" font-size="9">11.99</text>
+<line x1="55" y1="110.0" x2="580" y2="110.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="114.0" text-anchor="end" fill="#7c89a8" font-size="9">8.00</text>
+<line x1="55" y1="145.0" x2="580" y2="145.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="149.0" text-anchor="end" fill="#7c89a8" font-size="9">4.00</text>
+<line x1="55" y1="180.0" x2="580" y2="180.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="184.0" text-anchor="end" fill="#7c89a8" font-size="9">-0.00</text>
+<line x1="55" y1="40" x2="55" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<line x1="55" y1="180" x2="580" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<text x="13" y="110" text-anchor="middle" transform="rotate(-90 13 110)" fill="#8493b8" font-size="10">activation</text>
+<text x="317" y="215" text-anchor="middle" fill="#8493b8" font-size="10">layer</text>
+<path d="M 55.0 180.0 L 102.7 180.0 L 150.5 180.0 L 198.2 180.0 L 245.9 180.0 L 293.6 180.0 L 341.4 180.0 L 389.1 180.0 L 436.8 156.2 L 484.5 121.9 L 532.3 40.0 L 580.0 158.6" fill="none" stroke="#38e1ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1228: x=0.00, y=0.0000</title></circle>
+<circle cx="102.7" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1228: x=1.00, y=0.0000</title></circle>
+<circle cx="150.5" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1228: x=2.00, y=0.0000</title></circle>
+<circle cx="198.2" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1228: x=3.00, y=0.0000</title></circle>
+<circle cx="245.9" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1228: x=4.00, y=0.0000</title></circle>
+<circle cx="293.6" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1228: x=5.00, y=0.0000</title></circle>
+<circle cx="341.4" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1228: x=6.00, y=0.0000</title></circle>
+<circle cx="389.1" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1228: x=7.00, y=0.0000</title></circle>
+<circle cx="436.8" cy="156.2" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1228: x=8.00, y=2.7170</title></circle>
+<circle cx="484.5" cy="121.9" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1228: x=9.00, y=6.6308</title></circle>
+<circle cx="532.3" cy="40.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1228: x=10.00, y=15.9913</title></circle>
+<circle cx="580.0" cy="158.6" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1228: x=11.00, y=2.4486</title></circle>
+<line x1="590" y1="46" x2="608" y2="46" stroke="#38e1ff" stroke-width="2"/>
+<text x="612" y="50" fill="#aeb9d6" font-size="9">feature #1228</text>
+</svg></div></div>
+  </div>
+</div>
+<div class="section" id="#4-·-feature-1652">
+  <div class="section-header">
+    <span class="sx">§05</span>
+    <span class="icon" aria-hidden="true">◌</span>
+    <h2>#4 · Feature 1652</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    
+    <div class="svg-wrap"><div class='note'>peak 13.0 @ layer 10 → 0.0 all'output (crush 13.0) · firing rate sul corpus: 1.1%</div><p style='font-family:var(--mono);font-size:12.5px;color:var(--cyan);margin:10px 0'>lente unembed → 'pload' · ' grips' · ' conserve' · ' pasture' · ' accommodate' · ' fruition' · ' orbit' · ' defend'</p><table><thead><tr><th>act</th><th>max-activating example (wikitext)</th></tr></thead><tbody><tr><td style='font-family:var(--mono);font-size:11px'>16.4</td><td style='font-size:12px'> kept under house arrest , is escorted[[ to]] the capital city of Randgriz</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>14.8</td><td style='font-size:12px'> the Arsenal have been packed and sent[[ to]] Arkadelphia , in obedience to orders</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>14.3</td><td style='font-size:12px'> , which had been brought[[ to]] Little Rock in hopes of converting it</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>13.4</td><td style='font-size:12px'> at Fort Smith had been previously transferred[[ to]] the United States Arsenal in this city</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>12.5</td><td style='font-size:12px'> through the state on their way[[ to]] the newly established Oklahoma Territory . Thirty</td></tr></tbody></table><div class='svg-wrap' style='margin-top:14px'><svg xmlns="http://www.w3.org/2000/svg" width="700" height="220" font-family="ui-monospace, monospace" font-size="11">
+<defs><filter id="lglow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="700" height="220" fill="none" rx="4"/>
+<text x="350" y="22" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Activation across layers — prompt: 'The capital of France is'</text>
+<line x1="55" y1="40.0" x2="580" y2="40.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="44.0" text-anchor="end" fill="#7c89a8" font-size="9">13.04</text>
+<line x1="55" y1="75.0" x2="580" y2="75.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="79.0" text-anchor="end" fill="#7c89a8" font-size="9">9.78</text>
+<line x1="55" y1="110.0" x2="580" y2="110.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="114.0" text-anchor="end" fill="#7c89a8" font-size="9">6.52</text>
+<line x1="55" y1="145.0" x2="580" y2="145.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="149.0" text-anchor="end" fill="#7c89a8" font-size="9">3.26</text>
+<line x1="55" y1="180.0" x2="580" y2="180.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="184.0" text-anchor="end" fill="#7c89a8" font-size="9">-0.00</text>
+<line x1="55" y1="40" x2="55" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<line x1="55" y1="180" x2="580" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<text x="13" y="110" text-anchor="middle" transform="rotate(-90 13 110)" fill="#8493b8" font-size="10">activation</text>
+<text x="317" y="215" text-anchor="middle" fill="#8493b8" font-size="10">layer</text>
+<path d="M 55.0 180.0 L 102.7 180.0 L 150.5 180.0 L 198.2 180.0 L 245.9 180.0 L 293.6 180.0 L 341.4 174.3 L 389.1 159.4 L 436.8 114.9 L 484.5 65.9 L 532.3 40.0 L 580.0 180.0" fill="none" stroke="#38e1ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1652: x=0.00, y=0.0000</title></circle>
+<circle cx="102.7" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1652: x=1.00, y=0.0000</title></circle>
+<circle cx="150.5" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1652: x=2.00, y=0.0000</title></circle>
+<circle cx="198.2" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1652: x=3.00, y=0.0000</title></circle>
+<circle cx="245.9" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1652: x=4.00, y=0.0000</title></circle>
+<circle cx="293.6" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1652: x=5.00, y=0.0000</title></circle>
+<circle cx="341.4" cy="174.3" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1652: x=6.00, y=0.5342</title></circle>
+<circle cx="389.1" cy="159.4" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1652: x=7.00, y=1.9180</title></circle>
+<circle cx="436.8" cy="114.9" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1652: x=8.00, y=6.0660</title></circle>
+<circle cx="484.5" cy="65.9" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1652: x=9.00, y=10.6298</title></circle>
+<circle cx="532.3" cy="40.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1652: x=10.00, y=13.0386</title></circle>
+<circle cx="580.0" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1652: x=11.00, y=0.0000</title></circle>
+<line x1="590" y1="46" x2="608" y2="46" stroke="#38e1ff" stroke-width="2"/>
+<text x="612" y="50" fill="#aeb9d6" font-size="9">feature #1652</text>
+</svg></div></div>
+  </div>
+</div>
+<div class="section" id="#5-·-feature-1594">
+  <div class="section-header">
+    <span class="sx">§06</span>
+    <span class="icon" aria-hidden="true">◌</span>
+    <h2>#5 · Feature 1594</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    
+    <div class="svg-wrap"><div class='note'>peak 15.5 @ layer 10 → 3.0 all'output (crush 12.6) · firing rate sul corpus: 0.6%</div><p style='font-family:var(--mono);font-size:12.5px;color:var(--cyan);margin:10px 0'>lente unembed → ' Light' · ' Spirits' · ' Nations' · ' Ascension' · ' Angels' · ' Dreams' · ' Friendship' · ' Darkness'</p><table><thead><tr><th>act</th><th>max-activating example (wikitext)</th></tr></thead><tbody><tr><td style='font-family:var(--mono);font-size:11px'>19.6</td><td style='font-size:12px'> the Gulf[[ of]] Carpentaria and the Timor</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>14.9</td><td style='font-size:12px'> surrounding buildings were traded to the city[[ of]] Little Rock for 1 @,@</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>14.6</td><td style='font-size:12px'> Times ( 1928 ) and The Lord[[ of]] the Rushie River ( 1938 )</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>13.0</td><td style='font-size:12px'> of the Battlefield 3 -The Valkyrie[[ of]] the Crimson Fate ) , illustrated</td></tr><tr><td style='font-family:var(--mono);font-size:11px'>12.4</td><td style='font-size:12px'> of Van Dorn 's Army[[ of]] the West were the 1st</td></tr></tbody></table><div class='svg-wrap' style='margin-top:14px'><svg xmlns="http://www.w3.org/2000/svg" width="700" height="220" font-family="ui-monospace, monospace" font-size="11">
+<defs><filter id="lglow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="700" height="220" fill="none" rx="4"/>
+<text x="350" y="22" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Activation across layers — prompt: 'The capital of France is'</text>
+<line x1="55" y1="40.0" x2="580" y2="40.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="44.0" text-anchor="end" fill="#7c89a8" font-size="9">15.53</text>
+<line x1="55" y1="75.0" x2="580" y2="75.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="79.0" text-anchor="end" fill="#7c89a8" font-size="9">11.65</text>
+<line x1="55" y1="110.0" x2="580" y2="110.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="114.0" text-anchor="end" fill="#7c89a8" font-size="9">7.77</text>
+<line x1="55" y1="145.0" x2="580" y2="145.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="149.0" text-anchor="end" fill="#7c89a8" font-size="9">3.88</text>
+<line x1="55" y1="180.0" x2="580" y2="180.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="184.0" text-anchor="end" fill="#7c89a8" font-size="9">-0.00</text>
+<line x1="55" y1="40" x2="55" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<line x1="55" y1="180" x2="580" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<text x="13" y="110" text-anchor="middle" transform="rotate(-90 13 110)" fill="#8493b8" font-size="10">activation</text>
+<text x="317" y="215" text-anchor="middle" fill="#8493b8" font-size="10">layer</text>
+<path d="M 55.0 180.0 L 102.7 180.0 L 150.5 180.0 L 198.2 180.0 L 245.9 180.0 L 293.6 180.0 L 341.4 176.8 L 389.1 165.0 L 436.8 119.7 L 484.5 89.7 L 532.3 40.0 L 580.0 153.2" fill="none" stroke="#38e1ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1594: x=0.00, y=0.0000</title></circle>
+<circle cx="102.7" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1594: x=1.00, y=0.0000</title></circle>
+<circle cx="150.5" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1594: x=2.00, y=0.0000</title></circle>
+<circle cx="198.2" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1594: x=3.00, y=0.0000</title></circle>
+<circle cx="245.9" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1594: x=4.00, y=0.0000</title></circle>
+<circle cx="293.6" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1594: x=5.00, y=0.0000</title></circle>
+<circle cx="341.4" cy="176.8" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1594: x=6.00, y=0.3528</title></circle>
+<circle cx="389.1" cy="165.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1594: x=7.00, y=1.6663</title></circle>
+<circle cx="436.8" cy="119.7" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1594: x=8.00, y=6.6944</title></circle>
+<circle cx="484.5" cy="89.7" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1594: x=9.00, y=10.0190</title></circle>
+<circle cx="532.3" cy="40.0" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1594: x=10.00, y=15.5337</title></circle>
+<circle cx="580.0" cy="153.2" r="3" fill="#38e1ff" opacity="0.7"><title>feature #1594: x=11.00, y=2.9724</title></circle>
+<line x1="590" y1="46" x2="608" y2="46" stroke="#38e1ff" stroke-width="2"/>
+<text x="612" y="50" fill="#aeb9d6" font-size="9">feature #1594</text>
+</svg></div></div>
+  </div>
+</div>
+  <div class="foot">
+    <span>ONEPAI <span class="ok">●</span> introspection engine</span>
+    <span>//</span><span>generated 2026-07-02 00:32:10</span>
+    <span>//</span><span>6 modules</span>
+  </div>
+</main>
+<script>
+(function(){
+  var c=document.getElementById('bg-canvas'); if(c){
+    var ctx=c.getContext('2d'), N=56, nodes=[], DPR=Math.min(window.devicePixelRatio||1,2);
+    function resize(){ c.width=innerWidth*DPR; c.height=innerHeight*DPR; ctx.setTransform(DPR,0,0,DPR,0,0); }
+    resize(); addEventListener('resize',resize);
+    for(var i=0;i<N;i++){ nodes.push({x:Math.random()*innerWidth,y:Math.random()*innerHeight,vx:(Math.random()-0.5)*0.28,vy:(Math.random()-0.5)*0.28}); }
+    function tick(){
+      ctx.clearRect(0,0,innerWidth,innerHeight);
+      for(var i=0;i<N;i++){ var n=nodes[i]; n.x+=n.vx; n.y+=n.vy;
+        if(n.x<0||n.x>innerWidth)n.vx*=-1; if(n.y<0||n.y>innerHeight)n.vy*=-1; }
+      for(var i=0;i<N;i++) for(var j=i+1;j<N;j++){
+        var a=nodes[i],b=nodes[j],dx=a.x-b.x,dy=a.y-b.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d<150){ ctx.strokeStyle='rgba(56,225,255,'+(0.11*(1-d/150))+')'; ctx.lineWidth=1;
+          ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); } }
+      for(var i=0;i<N;i++){ var n=nodes[i]; ctx.fillStyle='rgba(130,180,255,0.55)';
+        ctx.beginPath(); ctx.arc(n.x,n.y,1.5,0,6.2832); ctx.fill(); }
+      requestAnimationFrame(tick);
+    } tick();
+  }
+  function easeOut(t){ return 1-Math.pow(1-t,3); }
+  document.querySelectorAll('[data-count]').forEach(function(el){
+    var target=parseFloat(el.getAttribute('data-count')), dec=parseInt(el.getAttribute('data-dec')||'0',10), t0=null;
+    function step(ts){ if(!t0)t0=ts; var p=Math.min((ts-t0)/900,1);
+      el.textContent=(target*easeOut(p)).toFixed(dec); if(p<1)requestAnimationFrame(step); }
+    requestAnimationFrame(step);
+  });
+  var io=new IntersectionObserver(function(es){ es.forEach(function(e){
+    if(e.isIntersecting){ e.target.classList.add('visible'); io.unobserve(e.target); } }); },{threshold:0.06});
+  document.querySelectorAll('.section').forEach(function(s,i){ s.style.transitionDelay=((i%3)*70)+'ms'; io.observe(s); });
+  document.querySelectorAll('.section-header').forEach(function(h){
+    h.addEventListener('click',function(){ var b=h.nextElementSibling,t=h.querySelector('.toggle');
+      b.classList.toggle('collapsed'); if(t)t.textContent=b.classList.contains('collapsed')?'[+]':'[-]'; }); });
+  var secs=document.querySelectorAll('.section[id]'), navs=document.querySelectorAll('#sidebar nav a');
+  addEventListener('scroll',function(){ var y=scrollY;
+    secs.forEach(function(s){ var top=s.offsetTop-90, bot=top+s.offsetHeight;
+      if(y>=top&&y<bot) navs.forEach(function(a){ a.classList.toggle('active',a.getAttribute('href')==='#'+s.id); }); }); },{passive:true});
+  navs.forEach(function(a){ a.addEventListener('click',function(e){ var t=document.querySelector(a.getAttribute('href'));
+    if(t){ e.preventDefault(); t.scrollIntoView({behavior:'smooth',block:'start'}); } }); });
+  function clock(){ var el=document.getElementById('clock'); if(el) el.textContent=new Date().toISOString().slice(11,19)+' UTC'; }
+  clock(); setInterval(clock,1000);
+  var boot=document.getElementById('boot');
+  if(boot){ var msg=boot.getAttribute('data-msg')||'', i=0;
+    (function type(){ if(i<=msg.length){ boot.innerHTML=msg.slice(0,i)+'<span style="color:#3df5a6">_</span>'; i++; setTimeout(type,16); }
+      else boot.innerHTML=msg+' <span class="ok">[ ok ]</span>'; })(); }
+})();
+</script>
+</body>
+</html>

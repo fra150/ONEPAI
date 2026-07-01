@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ONEPAI · Deep Introspection Report</title>
+  <style>
+:root {
+  --bg-0:#04060d; --bg-1:#070b16; --panel:rgba(16,22,40,0.55);
+  --panel-solid:#0b1120; --brd:rgba(120,165,255,0.16); --brd-glow:rgba(80,200,255,0.40);
+  --cyan:#38e1ff; --violet:#a274ff; --green:#3df5a6; --amber:#ffb74a; --red:#ff5d72;
+  --ghost:#8090b0; --text:#dfe8ff; --muted:#8493b8; --mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { scroll-behavior:smooth; }
+body { font-family:var(--sans); background:var(--bg-0); color:var(--text);
+  font-size:14px; line-height:1.55; -webkit-font-smoothing:antialiased; overflow-x:hidden; }
+body::before { content:""; position:fixed; inset:0; z-index:-2;
+  background:
+    radial-gradient(1200px 700px at 78% -8%, rgba(60,120,255,0.10), transparent 60%),
+    radial-gradient(900px 600px at 8% 108%, rgba(150,90,255,0.10), transparent 55%),
+    var(--bg-0);
+  background-attachment:fixed; }
+#bg-canvas { position:fixed; inset:0; z-index:-1; opacity:0.55; }
+.scanlines { position:fixed; inset:0; z-index:1; pointer-events:none; opacity:0.35;
+  background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,0.18) 3px); }
+a { color:var(--cyan); text-decoration:none; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+
+/* status bar */
+#statusbar { position:fixed; top:0; left:0; right:0; height:36px; z-index:200;
+  display:flex; align-items:center; gap:16px; padding:0 18px;
+  background:rgba(6,10,20,0.82); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--brd); font-family:var(--mono); font-size:11px; letter-spacing:0.08em; }
+#statusbar .live-dot { width:8px; height:8px; border-radius:50%; background:var(--green);
+  box-shadow:0 0 10px var(--green); animation:pulse 1.8s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.45;transform:scale(0.7);} }
+#statusbar .sb-brand { color:var(--cyan); font-weight:500; text-shadow:0 0 14px rgba(56,225,255,0.6); }
+#statusbar .sb-sep { color:var(--muted); }
+#statusbar .sb-meta { color:var(--muted); }
+#statusbar #clock { margin-left:auto; color:var(--text); }
+
+/* sidebar */
+#sidebar { position:fixed; top:36px; left:0; bottom:0; width:240px; z-index:100; overflow-y:auto;
+  background:rgba(7,11,22,0.62); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border-right:1px solid var(--brd); padding-bottom:30px; }
+#sidebar .brand-block { padding:22px 20px 16px; border-bottom:1px solid var(--brd); }
+#sidebar .brand-glyph { font-family:var(--mono); font-size:26px; color:var(--cyan);
+  text-shadow:0 0 18px rgba(56,225,255,0.7); animation:spin 9s linear infinite; display:inline-block; }
+@keyframes spin { to { transform:rotate(360deg); } }
+#sidebar .brand-name { font-size:15px; font-weight:500; letter-spacing:0.22em; margin-top:6px; }
+#sidebar .brand-sub { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:0.18em; margin-top:3px; }
+#sidebar nav { padding:12px 0; }
+#sidebar nav a { display:flex; align-items:center; gap:11px; padding:10px 20px; color:var(--muted);
+  font-size:12.5px; border-left:2px solid transparent; transition:all .18s; position:relative; }
+#sidebar nav a .nav-ix { font-family:var(--mono); font-size:10px; color:var(--brd-glow); min-width:22px; }
+#sidebar nav a:hover { color:var(--text); background:rgba(56,225,255,0.05); }
+#sidebar nav a.active { color:var(--cyan); background:rgba(56,225,255,0.08);
+  border-left-color:var(--cyan); box-shadow:inset 0 0 22px rgba(56,225,255,0.08); }
+#sidebar nav a.active .nav-ix { color:var(--cyan); }
+
+/* main */
+#main { margin-left:240px; padding:60px 40px 80px; max-width:1180px; position:relative; z-index:2; }
+.hero { margin-bottom:30px; }
+.hero h1 { font-size:27px; font-weight:500; letter-spacing:0.01em;
+  text-shadow:0 0 26px rgba(56,225,255,0.25); }
+.hero h1 .accent { color:var(--cyan); }
+.hero .boot { font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:9px;
+  border-left:2px solid var(--cyan); padding-left:11px; min-height:17px; }
+.hero .boot .ok { color:var(--green); }
+
+/* cards */
+.cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(176px,1fr)); gap:14px; margin-bottom:30px; }
+.card { position:relative; background:var(--panel); border:1px solid var(--brd); border-radius:12px;
+  padding:18px 16px 16px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); overflow:hidden; }
+.card::before { content:""; position:absolute; top:0; left:0; right:0; height:2px;
+  background:var(--cyan); box-shadow:0 0 16px var(--cyan); opacity:0.9; }
+.card.c-danger::before { background:var(--red); box-shadow:0 0 16px var(--red); }
+.card.c-warn::before { background:var(--amber); box-shadow:0 0 16px var(--amber); }
+.card.c-ok::before { background:var(--green); box-shadow:0 0 16px var(--green); }
+.card.c-violet::before { background:var(--violet); box-shadow:0 0 16px var(--violet); }
+.card .card-value { font-family:var(--mono); font-size:30px; font-weight:500; line-height:1;
+  color:var(--text); text-shadow:0 0 18px rgba(120,180,255,0.25); }
+.card .card-label { font-size:10.5px; color:var(--muted); margin-top:9px;
+  text-transform:uppercase; letter-spacing:0.12em; }
+.card .card-corner { position:absolute; bottom:8px; right:10px; font-family:var(--mono);
+  font-size:9px; color:var(--brd-glow); opacity:0.7; }
+
+/* sections */
+.section { background:var(--panel); border:1px solid var(--brd); border-radius:14px;
+  margin-bottom:22px; overflow:hidden; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  opacity:0; transform:translateY(18px); transition:opacity .6s ease, transform .6s ease; position:relative; }
+.section.visible { opacity:1; transform:translateY(0); }
+.section::before, .section::after { content:""; position:absolute; width:14px; height:14px; pointer-events:none; opacity:0.6; }
+.section::before { top:8px; left:8px; border-top:1.5px solid var(--brd-glow); border-left:1.5px solid var(--brd-glow); }
+.section::after { bottom:8px; right:8px; border-bottom:1.5px solid var(--brd-glow); border-right:1.5px solid var(--brd-glow); }
+.section-header { padding:15px 22px; cursor:pointer; display:flex; align-items:center; gap:13px;
+  border-bottom:1px solid var(--brd); user-select:none; transition:background .18s; }
+.section-header:hover { background:rgba(56,225,255,0.04); }
+.section-header .sx { font-family:var(--mono); font-size:11px; color:var(--cyan); letter-spacing:0.1em; }
+.section-header .icon { font-size:17px; filter:drop-shadow(0 0 8px rgba(56,225,255,0.5)); }
+.section-header h2 { font-size:16px; font-weight:500; flex:1; letter-spacing:0.01em; }
+.section-header .toggle { font-family:var(--mono); font-size:11px; color:var(--muted); }
+.section-body { padding:22px; overflow-x:auto; }
+.section-body.collapsed { display:none; }
+.svg-wrap { overflow-x:auto; }
+.svg-wrap svg { max-width:100%; height:auto; display:block; }
+
+/* note */
+.note { background:rgba(56,225,255,0.06); border-left:2px solid var(--cyan); padding:10px 15px;
+  font-size:12.5px; color:var(--text); border-radius:0 7px 7px 0; margin-bottom:15px; line-height:1.6; }
+
+/* tables */
+table { width:100%; border-collapse:collapse; font-size:12.5px; font-family:var(--mono); }
+th { padding:10px 13px; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.1em;
+  color:var(--cyan); border-bottom:1px solid var(--brd-glow); background:rgba(56,225,255,0.04); }
+td { padding:9px 13px; border-bottom:1px solid rgba(120,165,255,0.07); color:var(--text); }
+tr:hover td { background:rgba(56,225,255,0.04); }
+.badge { display:inline-block; padding:2px 9px; border-radius:20px; font-size:10px; font-weight:500;
+  font-family:var(--mono); letter-spacing:0.04em; }
+.badge-ghost { background:rgba(128,144,176,0.16); color:#aab6d4; border:1px solid rgba(128,144,176,0.35); }
+.badge-shadow { background:rgba(255,183,74,0.13); color:var(--amber); border:1px solid rgba(255,183,74,0.4); }
+.badge-dead { background:rgba(255,93,114,0.13); color:var(--red); border:1px solid rgba(255,93,114,0.42); }
+.badge-active { background:rgba(61,245,166,0.12); color:var(--green); border:1px solid rgba(61,245,166,0.4); }
+
+/* footer */
+.foot { margin-top:34px; padding-top:18px; border-top:1px solid var(--brd);
+  font-family:var(--mono); font-size:10.5px; color:var(--muted); letter-spacing:0.08em;
+  display:flex; gap:14px; flex-wrap:wrap; }
+.foot .ok { color:var(--green); }
+
+@media (max-width:820px) {
+  #sidebar { display:none; }
+  #main { margin-left:0; padding:54px 16px 60px; }
+}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+<div class="scanlines" aria-hidden="true"></div>
+<h2 class="sr-only">ONEPAI · Deep Introspection Report: report di introspezione del modello demo-transformer-8L.</h2>
+
+<header id="statusbar">
+  <span class="live-dot" aria-hidden="true"></span>
+  <span class="sb-brand">ONEPAI</span>
+  <span class="sb-sep">//</span>
+  <span class="sb-meta">neural observatory</span>
+  <span class="sb-sep">//</span>
+  <span class="sb-meta">target: demo-transformer-8L</span>
+  <span id="clock">--:--:-- UTC</span>
+</header>
+
+<aside id="sidebar">
+  <div class="brand-block">
+    <span class="brand-glyph" aria-hidden="true">◈</span>
+    <div class="brand-name">ONEPAI</div>
+    <div class="brand-sub">INTROSPECTION v0.2</div>
+  </div>
+  <nav><a href="#activation-overview"><span class="nav-ix">01</span><span class="icon" aria-hidden="true">◬</span>Activation Overview</a>
+<a href="#silence-map"><span class="nav-ix">02</span><span class="icon" aria-hidden="true">◍</span>Silence Map</a>
+<a href="#neural-circuit-graph"><span class="nav-ix">03</span><span class="icon" aria-hidden="true">⬡</span>Neural Circuit Graph</a>
+<a href="#activation-timeline"><span class="nav-ix">04</span><span class="icon" aria-hidden="true">◭</span>Activation Timeline</a>
+<a href="#logit-lens-—-confidence"><span class="nav-ix">05</span><span class="icon" aria-hidden="true">◎</span>Logit Lens — Confidence</a>
+<a href="#attention-flow-matrix"><span class="nav-ix">06</span><span class="icon" aria-hidden="true">◉</span>Attention Flow Matrix</a>
+<a href="#gradient-flow"><span class="nav-ix">07</span><span class="icon" aria-hidden="true">▽</span>Gradient Flow</a>
+<a href="#attention-head-analysis"><span class="nav-ix">08</span><span class="icon" aria-hidden="true">◉</span>Attention Head Analysis</a>
+<a href="#dead-parameters"><span class="nav-ix">09</span><span class="icon" aria-hidden="true">▽</span>Dead Parameters</a>
+<a href="#silent-entities"><span class="nav-ix">10</span><span class="icon" aria-hidden="true">◍</span>Silent Entities</a></nav>
+</aside>
+
+<main id="main">
+  <div class="hero">
+    <h1>ONEPAI · Deep Introspection Report</h1>
+    <div class="boot" id="boot" data-msg="initializing shadow map :: tracing silence :: target=demo-transformer-8L :: 10 modules online"></div>
+  </div>
+  <div class="cards"><div class="card "><span class="card-value" data-count="8.0" data-dec="0">0</span><div class="card-label">Layers tracked</div><div class="card-corner">#01</div></div><div class="card c-danger"><span class="card-value" data-count="11.0" data-dec="0">0</span><div class="card-label">Dead neurons</div><div class="card-corner">#02</div></div><div class="card c-warn"><span class="card-value" data-count="11.0" data-dec="0">0</span><div class="card-label">Silent layers</div><div class="card-corner">#03</div></div><div class="card c-violet"><span class="card-value" data-count="0.0" data-dec="0">0</span><div class="card-label">Ghost heads</div><div class="card-corner">#04</div></div><div class="card "><span class="card-value" data-count="12.0" data-dec="0">0</span><div class="card-label">Attention heads</div><div class="card-corner">#05</div></div><div class="card "><span class="card-value" data-count="8.0" data-dec="0">0</span><div class="card-label">Tracked layers</div><div class="card-corner">#06</div></div><div class="card c-danger"><span class="card-value" data-count="1.0" data-dec="0">0</span><div class="card-label">Dead parameters</div><div class="card-corner">#07</div></div><div class="card c-ok"><span class="card-value">DEGRADED</span><div class="card-label">Health</div><div class="card-corner">#08</div></div><div class="card "><span class="card-value" data-count="240.0" data-dec="0">0</span><div class="card-label">Analyzed observations</div><div class="card-corner">#09</div></div></div>
+  
+<div class="section" id="activation-overview">
+  <div class="section-header">
+    <span class="sx">§01</span>
+    <span class="icon" aria-hidden="true">◬</span>
+    <h2>Activation Overview</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">Media dell'activation_value per layer. mlp.1 è quasi sempre spento.</div>
+    <div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="122" height="236" font-family="ui-monospace, monospace" font-size="10">
+<text x="61" y="25" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Registry Activations</text>
+<rect x="80" y="40" width="22" height="22" fill="#b93a28" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.4341</title></rect>
+<text x="91" y="55" text-anchor="middle" fill="#e8eeff" font-size="8">0.43</text>
+<text x="75" y="55" text-anchor="end" fill="#9fb0d6">emb</text>
+<rect x="80" y="62" width="22" height="22" fill="#bd412c" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.4207</title></rect>
+<text x="91" y="77" text-anchor="middle" fill="#e8eeff" font-size="8">0.42</text>
+<text x="75" y="77" text-anchor="end" fill="#9fb0d6">attn.0</text>
+<rect x="80" y="84" width="22" height="22" fill="#a9241a" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.4811</title></rect>
+<text x="91" y="99" text-anchor="middle" fill="#e8eeff" font-size="8">0.48</text>
+<text x="75" y="99" text-anchor="end" fill="#9fb0d6">mlp.0</text>
+<rect x="80" y="106" width="22" height="22" fill="#990c0c" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.5295</title></rect>
+<text x="91" y="121" text-anchor="middle" fill="#e8eeff" font-size="8">0.53</text>
+<text x="75" y="121" text-anchor="end" fill="#9fb0d6">attn.1</text>
+<rect x="80" y="128" width="22" height="22" fill="#f2f2f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="91" y="143" text-anchor="middle" fill="#0a0f1c" font-size="8">0.00</text>
+<text x="75" y="143" text-anchor="end" fill="#9fb0d6">mlp.1</text>
+<rect x="80" y="150" width="22" height="22" fill="#b12f21" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.4580</title></rect>
+<text x="91" y="165" text-anchor="middle" fill="#e8eeff" font-size="8">0.46</text>
+<text x="75" y="165" text-anchor="end" fill="#9fb0d6">attn.2</text>
+<rect x="80" y="172" width="22" height="22" fill="#a72018" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.4877</title></rect>
+<text x="91" y="187" text-anchor="middle" fill="#e8eeff" font-size="8">0.49</text>
+<text x="75" y="187" text-anchor="end" fill="#9fb0d6">mlp.2</text>
+<rect x="80" y="194" width="22" height="22" fill="#b93a28" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.4340</title></rect>
+<text x="91" y="209" text-anchor="middle" fill="#e8eeff" font-size="8">0.43</text>
+<text x="75" y="209" text-anchor="end" fill="#9fb0d6">head</text>
+</svg></div>
+  </div>
+</div>
+<div class="section" id="silence-map">
+  <div class="section-header">
+    <span class="sx">§02</span>
+    <span class="icon" aria-hidden="true">◍</span>
+    <h2>Silence Map</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">Verde scuro = silenzio totale (silence_ratio → 1.0).</div>
+    <div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="124" height="1646" font-family="ui-monospace, monospace" font-size="10">
+<text x="62" y="25" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Silence Map — demo-transformer-8L</text>
+<text x="92" y="85" text-anchor="middle" transform="rotate(-45 92 85)" fill="#8493b8">0</text>
+<rect x="80" y="90" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="106" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="106" text-anchor="end" fill="#9fb0d6">emb:0</text>
+<rect x="80" y="114" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="130" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="130" text-anchor="end" fill="#9fb0d6">emb:1</text>
+<rect x="80" y="138" width="24" height="24" fill="#a5e0a5" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.2500</title></rect>
+<text x="92" y="154" text-anchor="middle" fill="#0a0f1c" font-size="8">0.2</text>
+<text x="75" y="154" text-anchor="end" fill="#9fb0d6">emb:2</text>
+<rect x="80" y="162" width="24" height="24" fill="#a5e0a5" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.2500</title></rect>
+<text x="92" y="178" text-anchor="middle" fill="#0a0f1c" font-size="8">0.2</text>
+<text x="75" y="178" text-anchor="end" fill="#9fb0d6">emb:3</text>
+<rect x="80" y="186" width="24" height="24" fill="#0c660c" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.7500</title></rect>
+<text x="92" y="202" text-anchor="middle" fill="#e8eeff" font-size="8">0.8</text>
+<text x="75" y="202" text-anchor="end" fill="#9fb0d6">emb:4</text>
+<rect x="80" y="210" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="226" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="226" text-anchor="end" fill="#9fb0d6">emb:5</text>
+<rect x="80" y="234" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="250" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="250" text-anchor="end" fill="#9fb0d6">emb:6</text>
+<rect x="80" y="258" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="274" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="274" text-anchor="end" fill="#9fb0d6">emb:7</text>
+<rect x="80" y="282" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="298" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="298" text-anchor="end" fill="#9fb0d6">attn.0:0</text>
+<rect x="80" y="306" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="322" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="322" text-anchor="end" fill="#9fb0d6">attn.0:1</text>
+<rect x="80" y="330" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="346" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="346" text-anchor="end" fill="#9fb0d6">attn.0:2</text>
+<rect x="80" y="354" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="370" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="370" text-anchor="end" fill="#9fb0d6">attn.0:3</text>
+<rect x="80" y="378" width="24" height="24" fill="#a5e0a5" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.2500</title></rect>
+<text x="92" y="394" text-anchor="middle" fill="#0a0f1c" font-size="8">0.2</text>
+<text x="75" y="394" text-anchor="end" fill="#9fb0d6">attn.0:4</text>
+<rect x="80" y="402" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="418" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="418" text-anchor="end" fill="#9fb0d6">attn.0:5</text>
+<rect x="80" y="426" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="442" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="442" text-anchor="end" fill="#9fb0d6">attn.0:6</text>
+<rect x="80" y="450" width="24" height="24" fill="#7fcc7f" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.3333</title></rect>
+<text x="92" y="466" text-anchor="middle" fill="#0a0f1c" font-size="8">0.3</text>
+<text x="75" y="466" text-anchor="end" fill="#9fb0d6">attn.0:7</text>
+<rect x="80" y="474" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="490" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="490" text-anchor="end" fill="#9fb0d6">mlp.0:0</text>
+<rect x="80" y="498" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="514" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="514" text-anchor="end" fill="#9fb0d6">mlp.0:1</text>
+<rect x="80" y="522" width="24" height="24" fill="#33a533" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.5000</title></rect>
+<text x="92" y="538" text-anchor="middle" fill="#e8eeff" font-size="8">0.5</text>
+<text x="75" y="538" text-anchor="end" fill="#9fb0d6">mlp.0:2</text>
+<rect x="80" y="546" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="562" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="562" text-anchor="end" fill="#9fb0d6">mlp.0:3</text>
+<rect x="80" y="570" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="586" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="586" text-anchor="end" fill="#9fb0d6">mlp.0:4</text>
+<rect x="80" y="594" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="610" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="610" text-anchor="end" fill="#9fb0d6">mlp.0:5</text>
+<rect x="80" y="618" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="634" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="634" text-anchor="end" fill="#9fb0d6">mlp.0:6</text>
+<rect x="80" y="642" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="658" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="658" text-anchor="end" fill="#9fb0d6">mlp.0:7</text>
+<rect x="80" y="666" width="24" height="24" fill="#a5e0a5" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.2500</title></rect>
+<text x="92" y="682" text-anchor="middle" fill="#0a0f1c" font-size="8">0.2</text>
+<text x="75" y="682" text-anchor="end" fill="#9fb0d6">attn.1:0</text>
+<rect x="80" y="690" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="706" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="706" text-anchor="end" fill="#9fb0d6">attn.1:1</text>
+<rect x="80" y="714" width="24" height="24" fill="#a5e0a5" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.2500</title></rect>
+<text x="92" y="730" text-anchor="middle" fill="#0a0f1c" font-size="8">0.2</text>
+<text x="75" y="730" text-anchor="end" fill="#9fb0d6">attn.1:2</text>
+<rect x="80" y="738" width="24" height="24" fill="#a5e0a5" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.2500</title></rect>
+<text x="92" y="754" text-anchor="middle" fill="#0a0f1c" font-size="8">0.2</text>
+<text x="75" y="754" text-anchor="end" fill="#9fb0d6">attn.1:3</text>
+<rect x="80" y="762" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="778" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="778" text-anchor="end" fill="#9fb0d6">attn.1:4</text>
+<rect x="80" y="786" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="802" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="802" text-anchor="end" fill="#9fb0d6">attn.1:5</text>
+<rect x="80" y="810" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="826" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="826" text-anchor="end" fill="#9fb0d6">attn.1:6</text>
+<rect x="80" y="834" width="24" height="24" fill="#7fcc7f" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.3333</title></rect>
+<text x="92" y="850" text-anchor="middle" fill="#0a0f1c" font-size="8">0.3</text>
+<text x="75" y="850" text-anchor="end" fill="#9fb0d6">attn.1:7</text>
+<rect x="80" y="858" width="24" height="24" fill="#002d00" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>1.0000</title></rect>
+<text x="92" y="874" text-anchor="middle" fill="#e8eeff" font-size="8">1.0</text>
+<text x="75" y="874" text-anchor="end" fill="#9fb0d6">mlp.1:0</text>
+<rect x="80" y="882" width="24" height="24" fill="#002d00" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>1.0000</title></rect>
+<text x="92" y="898" text-anchor="middle" fill="#e8eeff" font-size="8">1.0</text>
+<text x="75" y="898" text-anchor="end" fill="#9fb0d6">mlp.1:1</text>
+<rect x="80" y="906" width="24" height="24" fill="#002d00" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>1.0000</title></rect>
+<text x="92" y="922" text-anchor="middle" fill="#e8eeff" font-size="8">1.0</text>
+<text x="75" y="922" text-anchor="end" fill="#9fb0d6">mlp.1:2</text>
+<rect x="80" y="930" width="24" height="24" fill="#002d00" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>1.0000</title></rect>
+<text x="92" y="946" text-anchor="middle" fill="#e8eeff" font-size="8">1.0</text>
+<text x="75" y="946" text-anchor="end" fill="#9fb0d6">mlp.1:3</text>
+<rect x="80" y="954" width="24" height="24" fill="#002d00" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>1.0000</title></rect>
+<text x="92" y="970" text-anchor="middle" fill="#e8eeff" font-size="8">1.0</text>
+<text x="75" y="970" text-anchor="end" fill="#9fb0d6">mlp.1:4</text>
+<rect x="80" y="978" width="24" height="24" fill="#002d00" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>1.0000</title></rect>
+<text x="92" y="994" text-anchor="middle" fill="#e8eeff" font-size="8">1.0</text>
+<text x="75" y="994" text-anchor="end" fill="#9fb0d6">mlp.1:5</text>
+<rect x="80" y="1002" width="24" height="24" fill="#002d00" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>1.0000</title></rect>
+<text x="92" y="1018" text-anchor="middle" fill="#e8eeff" font-size="8">1.0</text>
+<text x="75" y="1018" text-anchor="end" fill="#9fb0d6">mlp.1:6</text>
+<rect x="80" y="1026" width="24" height="24" fill="#002d00" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>1.0000</title></rect>
+<text x="92" y="1042" text-anchor="middle" fill="#e8eeff" font-size="8">1.0</text>
+<text x="75" y="1042" text-anchor="end" fill="#9fb0d6">mlp.1:7</text>
+<rect x="80" y="1050" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1066" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1066" text-anchor="end" fill="#9fb0d6">attn.2:0</text>
+<rect x="80" y="1074" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1090" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1090" text-anchor="end" fill="#9fb0d6">attn.2:1</text>
+<rect x="80" y="1098" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1114" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1114" text-anchor="end" fill="#9fb0d6">attn.2:2</text>
+<rect x="80" y="1122" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1138" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1138" text-anchor="end" fill="#9fb0d6">attn.2:3</text>
+<rect x="80" y="1146" width="24" height="24" fill="#a5e0a5" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.2500</title></rect>
+<text x="92" y="1162" text-anchor="middle" fill="#0a0f1c" font-size="8">0.2</text>
+<text x="75" y="1162" text-anchor="end" fill="#9fb0d6">attn.2:4</text>
+<rect x="80" y="1170" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1186" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1186" text-anchor="end" fill="#9fb0d6">attn.2:5</text>
+<rect x="80" y="1194" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1210" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1210" text-anchor="end" fill="#9fb0d6">attn.2:6</text>
+<rect x="80" y="1218" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1234" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1234" text-anchor="end" fill="#9fb0d6">attn.2:7</text>
+<rect x="80" y="1242" width="24" height="24" fill="#a5e0a5" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.2500</title></rect>
+<text x="92" y="1258" text-anchor="middle" fill="#0a0f1c" font-size="8">0.2</text>
+<text x="75" y="1258" text-anchor="end" fill="#9fb0d6">mlp.2:0</text>
+<rect x="80" y="1266" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1282" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1282" text-anchor="end" fill="#9fb0d6">mlp.2:1</text>
+<rect x="80" y="1290" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1306" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1306" text-anchor="end" fill="#9fb0d6">mlp.2:2</text>
+<rect x="80" y="1314" width="24" height="24" fill="#a5e0a5" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.2500</title></rect>
+<text x="92" y="1330" text-anchor="middle" fill="#0a0f1c" font-size="8">0.2</text>
+<text x="75" y="1330" text-anchor="end" fill="#9fb0d6">mlp.2:3</text>
+<rect x="80" y="1338" width="24" height="24" fill="#a5e0a5" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.2500</title></rect>
+<text x="92" y="1354" text-anchor="middle" fill="#0a0f1c" font-size="8">0.2</text>
+<text x="75" y="1354" text-anchor="end" fill="#9fb0d6">mlp.2:4</text>
+<rect x="80" y="1362" width="24" height="24" fill="#a5e0a5" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.2500</title></rect>
+<text x="92" y="1378" text-anchor="middle" fill="#0a0f1c" font-size="8">0.2</text>
+<text x="75" y="1378" text-anchor="end" fill="#9fb0d6">mlp.2:5</text>
+<rect x="80" y="1386" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1402" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1402" text-anchor="end" fill="#9fb0d6">mlp.2:6</text>
+<rect x="80" y="1410" width="24" height="24" fill="#7fcc7f" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.3333</title></rect>
+<text x="92" y="1426" text-anchor="middle" fill="#0a0f1c" font-size="8">0.3</text>
+<text x="75" y="1426" text-anchor="end" fill="#9fb0d6">mlp.2:7</text>
+<rect x="80" y="1434" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1450" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1450" text-anchor="end" fill="#9fb0d6">head:0</text>
+<rect x="80" y="1458" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1474" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1474" text-anchor="end" fill="#9fb0d6">head:1</text>
+<rect x="80" y="1482" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1498" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1498" text-anchor="end" fill="#9fb0d6">head:2</text>
+<rect x="80" y="1506" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1522" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1522" text-anchor="end" fill="#9fb0d6">head:3</text>
+<rect x="80" y="1530" width="24" height="24" fill="#33a533" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.5000</title></rect>
+<text x="92" y="1546" text-anchor="middle" fill="#e8eeff" font-size="8">0.5</text>
+<text x="75" y="1546" text-anchor="end" fill="#9fb0d6">head:4</text>
+<rect x="80" y="1554" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1570" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1570" text-anchor="end" fill="#9fb0d6">head:5</text>
+<rect x="80" y="1578" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1594" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1594" text-anchor="end" fill="#9fb0d6">head:6</text>
+<rect x="80" y="1602" width="24" height="24" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="92" y="1618" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="1618" text-anchor="end" fill="#9fb0d6">head:7</text>
+</svg></div>
+  </div>
+</div>
+<div class="section" id="neural-circuit-graph">
+  <div class="section-header">
+    <span class="sx">§03</span>
+    <span class="icon" aria-hidden="true">⬡</span>
+    <h2>Neural Circuit Graph</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">Rosso=morto · grigio=fantasma · arancio=ombra · verde=critico.</div>
+    <div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="570" height="260" font-family="ui-monospace, monospace" font-size="11">
+<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="570" height="260" fill="none" rx="8"/>
+<text x="285" y="22" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.06em">Model circuit — shadow highlight</text>
+<path d="M 60 100 Q 60.0 120.0 60 180" fill="none" stroke="#4a90d9" stroke-width="2.1" opacity="0.70"><title>emb→attn.0 w=0.700</title></path>
+<path d="M 60 180 Q 125.0 120.0 190 100" fill="none" stroke="#e67e22" stroke-width="2.1" opacity="0.70"><title>attn.0→mlp.0 w=0.700</title></path>
+<path d="M 190 100 Q 190.0 120.0 190 180" fill="none" stroke="#4a90d9" stroke-width="2.1" opacity="0.70"><title>mlp.0→attn.1 w=0.700</title></path>
+<path d="M 190 180 Q 255.0 120.0 320 100" fill="none" stroke="#e67e22" stroke-width="2.1" opacity="0.70"><title>attn.1→mlp.1 w=0.700</title></path>
+<path d="M 320 100 Q 320.0 120.0 320 180" fill="none" stroke="#4a90d9" stroke-width="2.1" opacity="0.70"><title>mlp.1→attn.2 w=0.700</title></path>
+<path d="M 320 180 Q 385.0 120.0 450 100" fill="none" stroke="#e67e22" stroke-width="2.1" opacity="0.70"><title>attn.2→mlp.2 w=0.700</title></path>
+<path d="M 450 100 Q 450.0 120.0 450 180" fill="none" stroke="#4a90d9" stroke-width="2.1" opacity="0.70"><title>mlp.2→head w=0.700</title></path>
+<circle cx="60" cy="100" r="24" fill="#4a90d9" filter="url(#glow)" opacity="0.35"/>
+<circle cx="60" cy="100" r="24" fill="#4a90d9" stroke="rgba(255,255,255,0.85)" stroke-width="1.5" opacity="0.95"><title>emb
+type: active
+value: 0.0000</title></circle>
+<text x="60" y="138" text-anchor="middle" fill="#cdd9f5" font-size="9">emb</text>
+<circle cx="60" cy="180" r="24" fill="#4a90d9" filter="url(#glow)" opacity="0.35"/>
+<circle cx="60" cy="180" r="24" fill="#4a90d9" stroke="rgba(255,255,255,0.85)" stroke-width="1.5" opacity="0.95"><title>attn.0
+type: active
+value: 0.0000</title></circle>
+<text x="60" y="218" text-anchor="middle" fill="#cdd9f5" font-size="9">attn.0</text>
+<circle cx="190" cy="100" r="24" fill="#4a90d9" filter="url(#glow)" opacity="0.35"/>
+<circle cx="190" cy="100" r="24" fill="#4a90d9" stroke="rgba(255,255,255,0.85)" stroke-width="1.5" opacity="0.95"><title>mlp.0
+type: active
+value: 0.0000</title></circle>
+<text x="190" y="138" text-anchor="middle" fill="#cdd9f5" font-size="9">mlp.0</text>
+<circle cx="190" cy="180" r="24" fill="#4a90d9" filter="url(#glow)" opacity="0.35"/>
+<circle cx="190" cy="180" r="24" fill="#4a90d9" stroke="rgba(255,255,255,0.85)" stroke-width="1.5" opacity="0.95"><title>attn.1
+type: active
+value: 0.0000</title></circle>
+<text x="190" y="218" text-anchor="middle" fill="#cdd9f5" font-size="9">attn.1</text>
+<circle cx="320" cy="100" r="24" fill="#e04040" filter="url(#glow)" opacity="0.35"/>
+<circle cx="320" cy="100" r="24" fill="#e04040" stroke="rgba(255,255,255,0.85)" stroke-width="1.5" opacity="0.95"><title>mlp.1
+type: dead
+value: 0.0000</title></circle>
+<text x="320" y="138" text-anchor="middle" fill="#cdd9f5" font-size="9">mlp.1</text>
+<circle cx="320" cy="180" r="24" fill="#c0c0c0" filter="url(#glow)" opacity="0.35"/>
+<circle cx="320" cy="180" r="24" fill="#c0c0c0" stroke="rgba(255,255,255,0.85)" stroke-width="1.5" opacity="0.95"><title>attn.2
+type: ghost
+value: 0.0000</title></circle>
+<text x="320" y="218" text-anchor="middle" fill="#cdd9f5" font-size="9">attn.2</text>
+<circle cx="450" cy="100" r="24" fill="#4a90d9" filter="url(#glow)" opacity="0.35"/>
+<circle cx="450" cy="100" r="24" fill="#4a90d9" stroke="rgba(255,255,255,0.85)" stroke-width="1.5" opacity="0.95"><title>mlp.2
+type: active
+value: 0.0000</title></circle>
+<text x="450" y="138" text-anchor="middle" fill="#cdd9f5" font-size="9">mlp.2</text>
+<circle cx="450" cy="180" r="24" fill="#2ecc71" filter="url(#glow)" opacity="0.35"/>
+<circle cx="450" cy="180" r="24" fill="#2ecc71" stroke="rgba(255,255,255,0.85)" stroke-width="1.5" opacity="0.95"><title>head
+type: critical
+value: 0.0000</title></circle>
+<text x="450" y="218" text-anchor="middle" fill="#cdd9f5" font-size="9">head</text>
+<rect x="435" y="21" width="125" height="106" fill="rgba(10,16,32,0.72)" stroke="rgba(120,165,255,0.25)" rx="6"/>
+<circle cx="446" cy="32" r="5" fill="#4a90d9"/>
+<text x="456" y="35" fill="#9fb0d6" font-size="9">active</text>
+<circle cx="446" cy="48" r="5" fill="#c0c0c0"/>
+<text x="456" y="51" fill="#9fb0d6" font-size="9">ghost</text>
+<circle cx="446" cy="64" r="5" fill="#ff8c42"/>
+<text x="456" y="67" fill="#9fb0d6" font-size="9">shadow</text>
+<circle cx="446" cy="80" r="5" fill="#e04040"/>
+<text x="456" y="83" fill="#9fb0d6" font-size="9">dead</text>
+<circle cx="446" cy="96" r="5" fill="#2ecc71"/>
+<text x="456" y="99" fill="#9fb0d6" font-size="9">critical</text>
+<circle cx="446" cy="112" r="5" fill="#7f8c8d"/>
+<text x="456" y="115" fill="#9fb0d6" font-size="9">default</text>
+</svg></div>
+  </div>
+</div>
+<div class="section" id="activation-timeline">
+  <div class="section-header">
+    <span class="sx">§04</span>
+    <span class="icon" aria-hidden="true">◭</span>
+    <h2>Activation Timeline</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    
+    <div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="700" height="220" font-family="ui-monospace, monospace" font-size="11">
+<defs><filter id="lglow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="700" height="220" fill="none" rx="4"/>
+<text x="350" y="22" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Activation vs step</text>
+<line x1="55" y1="40.0" x2="580" y2="40.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="44.0" text-anchor="end" fill="#7c89a8" font-size="9">0.99</text>
+<line x1="55" y1="75.0" x2="580" y2="75.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="79.0" text-anchor="end" fill="#7c89a8" font-size="9">0.74</text>
+<line x1="55" y1="110.0" x2="580" y2="110.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="114.0" text-anchor="end" fill="#7c89a8" font-size="9">0.50</text>
+<line x1="55" y1="145.0" x2="580" y2="145.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="149.0" text-anchor="end" fill="#7c89a8" font-size="9">0.25</text>
+<line x1="55" y1="180.0" x2="580" y2="180.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="184.0" text-anchor="end" fill="#7c89a8" font-size="9">-0.00</text>
+<line x1="55" y1="40" x2="55" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<line x1="55" y1="180" x2="580" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<text x="13" y="110" text-anchor="middle" transform="rotate(-90 13 110)" fill="#8493b8" font-size="10">activation</text>
+<text x="317" y="215" text-anchor="middle" fill="#8493b8" font-size="10">step</text>
+<path d="M 55.0 45.6 L 82.6 154.3 L 110.3 173.4 L 137.9 180.0 L 165.5 180.0 L 193.2 70.8 L 220.8 134.0 L 248.4 175.6 L 276.1 56.8 L 303.7 121.0 L 331.3 174.8 L 358.9 77.0 L 386.6 180.0 L 414.2 64.4 L 441.8 168.1 L 469.5 134.0 L 497.1 108.9 L 524.7 119.5 L 552.4 40.0 L 580.0 67.1" fill="none" stroke="#38e1ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="45.6" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=0.00, y=0.9507</title></circle>
+<circle cx="82.6" cy="154.3" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=1.00, y=0.1818</title></circle>
+<circle cx="110.3" cy="173.4" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=2.00, y=0.0465</title></circle>
+<circle cx="137.9" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=3.00, y=0.0000</title></circle>
+<circle cx="165.5" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=4.00, y=0.0000</title></circle>
+<circle cx="193.2" cy="70.8" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=5.00, y=0.7722</title></circle>
+<circle cx="220.8" cy="134.0" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=6.00, y=0.3252</title></circle>
+<circle cx="248.4" cy="175.6" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=7.00, y=0.0314</title></circle>
+<circle cx="276.1" cy="56.8" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=8.00, y=0.8715</title></circle>
+<circle cx="303.7" cy="121.0" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=9.00, y=0.4174</title></circle>
+<circle cx="331.3" cy="174.8" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=10.00, y=0.0369</title></circle>
+<circle cx="358.9" cy="77.0" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=11.00, y=0.7282</title></circle>
+<circle cx="386.6" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=12.00, y=0.0000</title></circle>
+<circle cx="414.2" cy="64.4" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=13.00, y=0.8172</title></circle>
+<circle cx="441.8" cy="168.1" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=14.00, y=0.0841</title></circle>
+<circle cx="469.5" cy="134.0" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=15.00, y=0.3254</title></circle>
+<circle cx="497.1" cy="108.9" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=16.00, y=0.5026</title></circle>
+<circle cx="524.7" cy="119.5" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=17.00, y=0.4282</title></circle>
+<circle cx="552.4" cy="40.0" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=18.00, y=0.9901</title></circle>
+<circle cx="580.0" cy="67.1" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=19.00, y=0.7983</title></circle>
+<line x1="590" y1="46" x2="608" y2="46" stroke="#38e1ff" stroke-width="2"/>
+<text x="612" y="50" fill="#aeb9d6" font-size="9">emb</text>
+<path d="M 55.0 95.3 L 82.6 137.0 L 110.3 155.9 L 137.9 143.4 L 165.5 173.6 L 193.2 179.2 L 220.8 89.8 L 248.4 135.5 L 276.1 153.6 L 303.7 163.1 L 331.3 108.9 L 358.9 90.6 L 386.6 148.0 L 414.2 105.1 L 441.8 52.9 L 469.5 88.1 L 497.1 110.4 L 524.7 43.7 L 552.4 106.7 L 580.0 80.7" fill="none" stroke="#ffb74a" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="95.3" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=0.00, y=0.5987</title></circle>
+<circle cx="82.6" cy="137.0" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=1.00, y=0.3042</title></circle>
+<circle cx="110.3" cy="155.9" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=2.00, y=0.1705</title></circle>
+<circle cx="137.9" cy="143.4" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=3.00, y=0.2588</title></circle>
+<circle cx="165.5" cy="173.6" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=4.00, y=0.0452</title></circle>
+<circle cx="193.2" cy="179.2" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=5.00, y=0.0055</title></circle>
+<circle cx="220.8" cy="89.8" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=6.00, y=0.6376</title></circle>
+<circle cx="248.4" cy="135.5" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=7.00, y=0.3144</title></circle>
+<circle cx="276.1" cy="153.6" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=8.00, y=0.1866</title></circle>
+<circle cx="303.7" cy="163.1" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=9.00, y=0.1199</title></circle>
+<circle cx="331.3" cy="108.9" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=10.00, y=0.5027</title></circle>
+<circle cx="358.9" cy="90.6" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=11.00, y=0.6323</title></circle>
+<circle cx="386.6" cy="148.0" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=12.00, y=0.2265</title></circle>
+<circle cx="414.2" cy="105.1" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=13.00, y=0.5297</title></circle>
+<circle cx="441.8" cy="52.9" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=14.00, y=0.8986</title></circle>
+<circle cx="469.5" cy="88.1" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=15.00, y=0.6496</title></circle>
+<circle cx="497.1" cy="110.4" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=16.00, y=0.4925</title></circle>
+<circle cx="524.7" cy="43.7" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=17.00, y=0.9636</title></circle>
+<circle cx="552.4" cy="106.7" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=18.00, y=0.5183</title></circle>
+<circle cx="580.0" cy="80.7" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=19.00, y=0.7020</title></circle>
+<line x1="590" y1="64" x2="608" y2="64" stroke="#ffb74a" stroke-width="2"/>
+<text x="612" y="68" fill="#aeb9d6" font-size="9">attn.0</text>
+<path d="M 55.0 157.9 L 82.6 118.9 L 110.3 180.0 L 137.9 135.9 L 165.5 125.0 L 193.2 80.0 L 220.8 113.2 L 248.4 51.7 L 276.1 103.7 L 303.7 46.7 L 331.3 180.0 L 358.9 104.2 L 386.6 155.3 L 414.2 166.8 L 441.8 178.7 L 469.5 87.0 L 497.1 77.8 L 524.7 138.4 L 552.4 75.3 L 580.0 54.1" fill="none" stroke="#3df5a6" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="157.9" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=0.00, y=0.1560</title></circle>
+<circle cx="82.6" cy="118.9" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=1.00, y=0.4319</title></circle>
+<circle cx="110.3" cy="180.0" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=2.00, y=0.0000</title></circle>
+<circle cx="137.9" cy="135.9" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=3.00, y=0.3117</title></circle>
+<circle cx="165.5" cy="125.0" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=4.00, y=0.3887</title></circle>
+<circle cx="193.2" cy="80.0" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=5.00, y=0.7069</title></circle>
+<circle cx="220.8" cy="113.2" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=6.00, y=0.4722</title></circle>
+<circle cx="248.4" cy="51.7" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=7.00, y=0.9076</title></circle>
+<circle cx="276.1" cy="103.7" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=8.00, y=0.5393</title></circle>
+<circle cx="303.7" cy="46.7" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=9.00, y=0.9429</title></circle>
+<circle cx="331.3" cy="180.0" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=10.00, y=0.0000</title></circle>
+<circle cx="358.9" cy="104.2" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=11.00, y=0.5358</title></circle>
+<circle cx="386.6" cy="155.3" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=12.00, y=0.1744</title></circle>
+<circle cx="414.2" cy="166.8" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=13.00, y=0.0931</title></circle>
+<circle cx="441.8" cy="178.7" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=14.00, y=0.0092</title></circle>
+<circle cx="469.5" cy="87.0" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=15.00, y=0.6576</title></circle>
+<circle cx="497.1" cy="77.8" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=16.00, y=0.7225</title></circle>
+<circle cx="524.7" cy="138.4" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=17.00, y=0.2944</title></circle>
+<circle cx="552.4" cy="75.3" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=18.00, y=0.7408</title></circle>
+<circle cx="580.0" cy="54.1" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=19.00, y=0.8900</title></circle>
+<line x1="590" y1="82" x2="608" y2="82" stroke="#3df5a6" stroke-width="2"/>
+<text x="612" y="86" fill="#aeb9d6" font-size="9">mlp.0</text>
+<path d="M 55.0 180.0 L 82.6 93.5 L 110.3 43.5 L 137.9 102.7 L 165.5 62.8 L 193.2 70.9 L 220.8 79.1 L 248.4 122.0 L 276.1 53.3 L 303.7 106.6 L 331.3 51.6 L 358.9 180.0 L 386.6 125.3 L 414.2 52.7 L 441.8 86.2 L 469.5 166.8 L 497.1 176.6 L 524.7 59.6 L 552.4 80.7 L 580.0 126.9" fill="none" stroke="#ff5d72" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="180.0" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=0.00, y=0.0000</title></circle>
+<circle cx="82.6" cy="93.5" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=1.00, y=0.6119</title></circle>
+<circle cx="110.3" cy="43.5" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=2.00, y=0.9656</title></circle>
+<circle cx="137.9" cy="102.7" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=3.00, y=0.5467</title></circle>
+<circle cx="165.5" cy="62.8" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=4.00, y=0.8287</title></circle>
+<circle cx="193.2" cy="70.9" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=5.00, y=0.7713</title></circle>
+<circle cx="220.8" cy="79.1" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=6.00, y=0.7132</title></circle>
+<circle cx="248.4" cy="122.0" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=7.00, y=0.4104</title></circle>
+<circle cx="276.1" cy="53.3" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=8.00, y=0.8961</title></circle>
+<circle cx="303.7" cy="106.6" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=9.00, y=0.5188</title></circle>
+<circle cx="331.3" cy="51.6" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=10.00, y=0.9083</title></circle>
+<circle cx="358.9" cy="180.0" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=11.00, y=0.0000</title></circle>
+<circle cx="386.6" cy="125.3" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=12.00, y=0.3867</title></circle>
+<circle cx="414.2" cy="52.7" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=13.00, y=0.9004</title></circle>
+<circle cx="441.8" cy="86.2" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=14.00, y=0.6635</title></circle>
+<circle cx="469.5" cy="166.8" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=15.00, y=0.0937</title></circle>
+<circle cx="497.1" cy="176.6" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=16.00, y=0.0243</title></circle>
+<circle cx="524.7" cy="59.6" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=17.00, y=0.8511</title></circle>
+<circle cx="552.4" cy="80.7" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=18.00, y=0.7025</title></circle>
+<circle cx="580.0" cy="126.9" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=19.00, y=0.3756</title></circle>
+<line x1="590" y1="100" x2="608" y2="100" stroke="#ff5d72" stroke-width="2"/>
+<text x="612" y="104" fill="#aeb9d6" font-size="9">attn.1</text>
+<path d="M 55.0 180.0 L 82.6 180.0 L 110.3 180.0 L 137.9 180.0 L 165.5 180.0 L 193.2 180.0 L 220.8 180.0 L 248.4 180.0 L 276.1 180.0 L 303.7 180.0 L 331.3 180.0 L 358.9 180.0 L 386.6 180.0 L 414.2 180.0 L 441.8 180.0 L 469.5 180.0 L 497.1 180.0 L 524.7 180.0 L 552.4 180.0 L 580.0 180.0" fill="none" stroke="#a274ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=0.00, y=0.0000</title></circle>
+<circle cx="82.6" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=1.00, y=0.0000</title></circle>
+<circle cx="110.3" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=2.00, y=0.0000</title></circle>
+<circle cx="137.9" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=3.00, y=0.0000</title></circle>
+<circle cx="165.5" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=4.00, y=0.0000</title></circle>
+<circle cx="193.2" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=5.00, y=0.0000</title></circle>
+<circle cx="220.8" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=6.00, y=0.0000</title></circle>
+<circle cx="248.4" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=7.00, y=0.0000</title></circle>
+<circle cx="276.1" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=8.00, y=0.0000</title></circle>
+<circle cx="303.7" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=9.00, y=0.0000</title></circle>
+<circle cx="331.3" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=10.00, y=0.0000</title></circle>
+<circle cx="358.9" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=11.00, y=0.0000</title></circle>
+<circle cx="386.6" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=12.00, y=0.0000</title></circle>
+<circle cx="414.2" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=13.00, y=0.0000</title></circle>
+<circle cx="441.8" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=14.00, y=0.0000</title></circle>
+<circle cx="469.5" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=15.00, y=0.0000</title></circle>
+<circle cx="497.1" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=16.00, y=0.0000</title></circle>
+<circle cx="524.7" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=17.00, y=0.0000</title></circle>
+<circle cx="552.4" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=18.00, y=0.0000</title></circle>
+<circle cx="580.0" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=19.00, y=0.0000</title></circle>
+<line x1="590" y1="118" x2="608" y2="118" stroke="#a274ff" stroke-width="2"/>
+<text x="612" y="122" fill="#aeb9d6" font-size="9">mlp.1</text>
+<path d="M 55.0 79.9 L 82.6 128.2 L 110.3 166.2 L 137.9 70.4 L 165.5 103.3 L 193.2 163.6 L 220.8 71.0 L 248.4 169.1 L 276.1 147.8 L 303.7 42.6 L 331.3 110.8 L 358.9 153.6 L 386.6 131.8 L 414.2 130.6 L 441.8 102.4 L 469.5 145.5 L 497.1 47.0 L 524.7 101.3 L 552.4 65.6 L 580.0 174.9" fill="none" stroke="#2ee6c8" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="79.9" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=0.00, y=0.7081</title></circle>
+<circle cx="82.6" cy="128.2" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=1.00, y=0.3664</title></circle>
+<circle cx="110.3" cy="166.2" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=2.00, y=0.0977</title></circle>
+<circle cx="137.9" cy="70.4" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=3.00, y=0.7751</title></circle>
+<circle cx="165.5" cy="103.3" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=4.00, y=0.5427</title></circle>
+<circle cx="193.2" cy="163.6" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=5.00, y=0.1159</title></circle>
+<circle cx="220.8" cy="71.0" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=6.00, y=0.7710</title></circle>
+<circle cx="248.4" cy="169.1" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=7.00, y=0.0770</title></circle>
+<circle cx="276.1" cy="147.8" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=8.00, y=0.2279</title></circle>
+<circle cx="303.7" cy="42.6" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=9.00, y=0.9718</title></circle>
+<circle cx="331.3" cy="110.8" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=10.00, y=0.4895</title></circle>
+<circle cx="358.9" cy="153.6" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=11.00, y=0.1865</title></circle>
+<circle cx="386.6" cy="131.8" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=12.00, y=0.3411</title></circle>
+<circle cx="414.2" cy="130.6" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=13.00, y=0.3492</title></circle>
+<circle cx="441.8" cy="102.4" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=14.00, y=0.5487</title></circle>
+<circle cx="469.5" cy="145.5" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=15.00, y=0.2440</title></circle>
+<circle cx="497.1" cy="47.0" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=16.00, y=0.9405</title></circle>
+<circle cx="524.7" cy="101.3" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=17.00, y=0.5568</title></circle>
+<circle cx="552.4" cy="65.6" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=18.00, y=0.8094</title></circle>
+<circle cx="580.0" cy="174.9" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=19.00, y=0.0359</title></circle>
+<line x1="590" y1="136" x2="608" y2="136" stroke="#2ee6c8" stroke-width="2"/>
+<text x="612" y="140" fill="#aeb9d6" font-size="9">attn.2</text>
+</svg></div>
+  </div>
+</div>
+<div class="section" id="logit-lens-—-confidence">
+  <div class="section-header">
+    <span class="sx">§05</span>
+    <span class="icon" aria-hidden="true">◎</span>
+    <h2>Logit Lens — Confidence</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">La confidenza del token target cresce strato dopo strato.</div>
+    <div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="700" height="220" font-family="ui-monospace, monospace" font-size="11">
+<defs><filter id="lglow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="700" height="220" fill="none" rx="4"/>
+<text x="350" y="22" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Confidence Through Layers</text>
+<line x1="55" y1="40.0" x2="580" y2="40.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="44.0" text-anchor="end" fill="#7c89a8" font-size="9">0.96</text>
+<line x1="55" y1="75.0" x2="580" y2="75.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="79.0" text-anchor="end" fill="#7c89a8" font-size="9">0.72</text>
+<line x1="55" y1="110.0" x2="580" y2="110.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="114.0" text-anchor="end" fill="#7c89a8" font-size="9">0.49</text>
+<line x1="55" y1="145.0" x2="580" y2="145.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="149.0" text-anchor="end" fill="#7c89a8" font-size="9">0.25</text>
+<line x1="55" y1="180.0" x2="580" y2="180.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="184.0" text-anchor="end" fill="#7c89a8" font-size="9">0.02</text>
+<line x1="55" y1="40" x2="55" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<line x1="55" y1="180" x2="580" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<text x="13" y="110" text-anchor="middle" transform="rotate(-90 13 110)" fill="#8493b8" font-size="10">confidence</text>
+<text x="317" y="215" text-anchor="middle" fill="#8493b8" font-size="10">layer index</text>
+<path d="M 55.0 179.8 L 130.0 180.0 L 205.0 174.8 L 280.0 174.8 L 355.0 153.6 L 430.0 105.4 L 505.0 59.5 L 580.0 40.0" fill="none" stroke="#38e1ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="179.8" r="3" fill="#38e1ff" opacity="0.7"><title>pos=0: x=0.00, y=0.0172</title></circle>
+<circle cx="130.0" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>pos=0: x=1.00, y=0.0157</title></circle>
+<circle cx="205.0" cy="174.8" r="3" fill="#38e1ff" opacity="0.7"><title>pos=0: x=2.00, y=0.0508</title></circle>
+<circle cx="280.0" cy="174.8" r="3" fill="#38e1ff" opacity="0.7"><title>pos=0: x=3.00, y=0.0506</title></circle>
+<circle cx="355.0" cy="153.6" r="3" fill="#38e1ff" opacity="0.7"><title>pos=0: x=4.00, y=0.1933</title></circle>
+<circle cx="430.0" cy="105.4" r="3" fill="#38e1ff" opacity="0.7"><title>pos=0: x=5.00, y=0.5183</title></circle>
+<circle cx="505.0" cy="59.5" r="3" fill="#38e1ff" opacity="0.7"><title>pos=0: x=6.00, y=0.8274</title></circle>
+<circle cx="580.0" cy="40.0" r="3" fill="#38e1ff" opacity="0.7"><title>pos=0: x=7.00, y=0.9588</title></circle>
+<line x1="590" y1="46" x2="608" y2="46" stroke="#38e1ff" stroke-width="2"/>
+<text x="612" y="50" fill="#aeb9d6" font-size="9">pos=0</text>
+</svg></div>
+  </div>
+</div>
+<div class="section" id="attention-flow-matrix">
+  <div class="section-header">
+    <span class="sx">§06</span>
+    <span class="icon" aria-hidden="true">◉</span>
+    <h2>Attention Flow Matrix</h2>
+    <span class="toggle">[+]</span>
+  </div>
+  <div class="section-body collapsed">
+    
+    <div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="238" height="268" font-family="ui-monospace, monospace" font-size="10">
+<text x="119" y="25" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Aggregate attention flow</text>
+<rect x="10" y="40" width="26" height="26" fill="#0859af" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1353</title></rect>
+<text x="23" y="57" text-anchor="middle" fill="#e8eeff" font-size="8">0.14</text>
+<rect x="36" y="40" width="26" height="26" fill="#f2f2ff" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1078</title></rect>
+<text x="49" y="57" text-anchor="middle" fill="#0a0f1c" font-size="8">0.11</text>
+<rect x="62" y="40" width="26" height="26" fill="#3c97db" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1264</title></rect>
+<text x="75" y="57" text-anchor="middle" fill="#0a0f1c" font-size="8">0.13</text>
+<rect x="88" y="40" width="26" height="26" fill="#61b0e8" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1227</title></rect>
+<text x="101" y="57" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="114" y="40" width="26" height="26" fill="#1472c4" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1316</title></rect>
+<text x="127" y="57" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="140" y="40" width="26" height="26" fill="#1d7ac9" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1305</title></rect>
+<text x="153" y="57" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="166" y="40" width="26" height="26" fill="#75baea" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1211</title></rect>
+<text x="179" y="57" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="192" y="40" width="26" height="26" fill="#4aa3e4" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1246</title></rect>
+<text x="205" y="57" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="10" y="66" width="26" height="26" fill="#0b65ba" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1335</title></rect>
+<text x="23" y="83" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="36" y="66" width="26" height="26" fill="#b6daf3" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1156</title></rect>
+<text x="49" y="83" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="62" y="66" width="26" height="26" fill="#47a1e2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1250</title></rect>
+<text x="75" y="83" text-anchor="middle" fill="#0a0f1c" font-size="8">0.13</text>
+<rect x="88" y="66" width="26" height="26" fill="#47a1e2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1250</title></rect>
+<text x="101" y="83" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="114" y="66" width="26" height="26" fill="#2682ce" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1294</title></rect>
+<text x="127" y="83" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="140" y="66" width="26" height="26" fill="#cce3f7" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1127</title></rect>
+<text x="153" y="83" text-anchor="middle" fill="#0a0f1c" font-size="8">0.11</text>
+<rect x="166" y="66" width="26" height="26" fill="#2985d0" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1289</title></rect>
+<text x="179" y="83" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="192" y="66" width="26" height="26" fill="#227fcc" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1299</title></rect>
+<text x="205" y="83" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="10" y="92" width="26" height="26" fill="#6ab4e9" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1219</title></rect>
+<text x="23" y="109" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="36" y="92" width="26" height="26" fill="#054ba2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1373</title></rect>
+<text x="49" y="109" text-anchor="middle" fill="#e8eeff" font-size="8">0.14</text>
+<rect x="62" y="92" width="26" height="26" fill="#a2d0f0" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1174</title></rect>
+<text x="75" y="109" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="88" y="92" width="26" height="26" fill="#0a61b6" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1341</title></rect>
+<text x="101" y="109" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="114" y="92" width="26" height="26" fill="#77bbea" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1208</title></rect>
+<text x="127" y="109" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="140" y="92" width="26" height="26" fill="#2e8ad3" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1282</title></rect>
+<text x="153" y="109" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="166" y="92" width="26" height="26" fill="#95caee" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1185</title></rect>
+<text x="179" y="109" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="192" y="92" width="26" height="26" fill="#6cb5e9" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1217</title></rect>
+<text x="205" y="109" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="10" y="118" width="26" height="26" fill="#217ecb" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1300</title></rect>
+<text x="23" y="135" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="36" y="118" width="26" height="26" fill="#5daee7" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1230</title></rect>
+<text x="49" y="135" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="62" y="118" width="26" height="26" fill="#55aae6" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1236</title></rect>
+<text x="75" y="135" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="88" y="118" width="26" height="26" fill="#beddf4" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1145</title></rect>
+<text x="101" y="135" text-anchor="middle" fill="#0a0f1c" font-size="8">0.11</text>
+<rect x="114" y="118" width="26" height="26" fill="#3d98dc" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1263</title></rect>
+<text x="127" y="135" text-anchor="middle" fill="#0a0f1c" font-size="8">0.13</text>
+<rect x="140" y="118" width="26" height="26" fill="#3e99dd" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1261</title></rect>
+<text x="153" y="135" text-anchor="middle" fill="#0a0f1c" font-size="8">0.13</text>
+<rect x="166" y="118" width="26" height="26" fill="#8dc6ed" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1191</title></rect>
+<text x="179" y="135" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="192" y="118" width="26" height="26" fill="#054ba2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1374</title></rect>
+<text x="205" y="135" text-anchor="middle" fill="#e8eeff" font-size="8">0.14</text>
+<rect x="10" y="144" width="26" height="26" fill="#3691d8" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1273</title></rect>
+<text x="23" y="161" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="36" y="144" width="26" height="26" fill="#81c0ec" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1200</title></rect>
+<text x="49" y="161" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="62" y="144" width="26" height="26" fill="#c2dff5" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1139</title></rect>
+<text x="75" y="161" text-anchor="middle" fill="#0a0f1c" font-size="8">0.11</text>
+<rect x="88" y="144" width="26" height="26" fill="#0b67bc" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1332</title></rect>
+<text x="101" y="161" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="114" y="144" width="26" height="26" fill="#3c97dc" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1264</title></rect>
+<text x="127" y="161" text-anchor="middle" fill="#0a0f1c" font-size="8">0.13</text>
+<rect x="140" y="144" width="26" height="26" fill="#1a77c7" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1309</title></rect>
+<text x="153" y="161" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="166" y="144" width="26" height="26" fill="#cae2f7" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1130</title></rect>
+<text x="179" y="161" text-anchor="middle" fill="#0a0f1c" font-size="8">0.11</text>
+<rect x="192" y="144" width="26" height="26" fill="#085aaf" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1352</title></rect>
+<text x="205" y="161" text-anchor="middle" fill="#e8eeff" font-size="8">0.14</text>
+<rect x="10" y="170" width="26" height="26" fill="#72b8ea" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1212</title></rect>
+<text x="23" y="187" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="36" y="170" width="26" height="26" fill="#1976c6" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1311</title></rect>
+<text x="49" y="187" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="62" y="170" width="26" height="26" fill="#0752a8" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1364</title></rect>
+<text x="75" y="187" text-anchor="middle" fill="#e8eeff" font-size="8">0.14</text>
+<rect x="88" y="170" width="26" height="26" fill="#68b3e8" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1221</title></rect>
+<text x="101" y="187" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="114" y="170" width="26" height="26" fill="#338ed6" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1277</title></rect>
+<text x="127" y="187" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="140" y="170" width="26" height="26" fill="#83c1ec" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1199</title></rect>
+<text x="153" y="187" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="166" y="170" width="26" height="26" fill="#5aace7" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1232</title></rect>
+<text x="179" y="187" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="192" y="170" width="26" height="26" fill="#95caee" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1184</title></rect>
+<text x="205" y="187" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="10" y="196" width="26" height="26" fill="#2884cf" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1291</title></rect>
+<text x="23" y="213" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="36" y="196" width="26" height="26" fill="#2a86d0" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1289</title></rect>
+<text x="49" y="213" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="62" y="196" width="26" height="26" fill="#0a60b5" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1342</title></rect>
+<text x="75" y="213" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="88" y="196" width="26" height="26" fill="#d2e5f8" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1118</title></rect>
+<text x="101" y="213" text-anchor="middle" fill="#0a0f1c" font-size="8">0.11</text>
+<rect x="114" y="196" width="26" height="26" fill="#cee3f7" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1125</title></rect>
+<text x="127" y="213" text-anchor="middle" fill="#0a0f1c" font-size="8">0.11</text>
+<rect x="140" y="196" width="26" height="26" fill="#b9dbf3" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1152</title></rect>
+<text x="153" y="213" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="166" y="196" width="26" height="26" fill="#00338c" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1410</title></rect>
+<text x="179" y="213" text-anchor="middle" fill="#e8eeff" font-size="8">0.14</text>
+<rect x="192" y="196" width="26" height="26" fill="#3590d7" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1274</title></rect>
+<text x="205" y="213" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="10" y="222" width="26" height="26" fill="#b7daf3" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1154</title></rect>
+<text x="23" y="239" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="36" y="222" width="26" height="26" fill="#49a3e3" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1247</title></rect>
+<text x="49" y="239" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="62" y="222" width="26" height="26" fill="#1976c7" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1310</title></rect>
+<text x="75" y="239" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="88" y="222" width="26" height="26" fill="#2f8bd4" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1281</title></rect>
+<text x="101" y="239" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="114" y="222" width="26" height="26" fill="#77bbea" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1209</title></rect>
+<text x="127" y="239" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="140" y="222" width="26" height="26" fill="#7bbdeb" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1206</title></rect>
+<text x="153" y="239" text-anchor="middle" fill="#0a0f1c" font-size="8">0.12</text>
+<rect x="166" y="222" width="26" height="26" fill="#2e89d3" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1283</title></rect>
+<text x="179" y="239" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+<rect x="192" y="222" width="26" height="26" fill="#1a77c7" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1309</title></rect>
+<text x="205" y="239" text-anchor="middle" fill="#e8eeff" font-size="8">0.13</text>
+</svg></div>
+  </div>
+</div>
+<div class="section" id="gradient-flow">
+  <div class="section-header">
+    <span class="sx">§07</span>
+    <span class="icon" aria-hidden="true">▽</span>
+    <h2>Gradient Flow</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">mlp.1 collassa verso zero: gradienti morenti.</div>
+    <div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="700" height="220" font-family="ui-monospace, monospace" font-size="11">
+<defs><filter id="lglow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="700" height="220" fill="none" rx="4"/>
+<text x="350" y="22" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Gradient magnitude per layer (log scale)</text>
+<line x1="55" y1="40.0" x2="580" y2="40.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="44.0" text-anchor="end" fill="#7c89a8" font-size="9">0.31</text>
+<line x1="55" y1="75.0" x2="580" y2="75.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="79.0" text-anchor="end" fill="#7c89a8" font-size="9">-1.89</text>
+<line x1="55" y1="110.0" x2="580" y2="110.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="114.0" text-anchor="end" fill="#7c89a8" font-size="9">-4.10</text>
+<line x1="55" y1="145.0" x2="580" y2="145.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="149.0" text-anchor="end" fill="#7c89a8" font-size="9">-6.30</text>
+<line x1="55" y1="180.0" x2="580" y2="180.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="184.0" text-anchor="end" fill="#7c89a8" font-size="9">-8.51</text>
+<line x1="55" y1="40" x2="55" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<line x1="55" y1="180" x2="580" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<text x="13" y="110" text-anchor="middle" transform="rotate(-90 13 110)" fill="#8493b8" font-size="10">log₁₀(|grad|)</text>
+<text x="317" y="215" text-anchor="middle" fill="#8493b8" font-size="10">step</text>
+<path d="M 55.0 40.9 L 82.6 45.5 L 110.3 46.3 L 137.9 49.0 L 165.5 43.3 L 193.2 45.2 L 220.8 43.3 L 248.4 45.4 L 276.1 52.0 L 303.7 50.6 L 331.3 42.7 L 358.9 40.8 L 386.6 42.0 L 414.2 50.4 L 441.8 41.5 L 469.5 44.9 L 497.1 47.5 L 524.7 42.8 L 552.4 42.6 L 580.0 47.4" fill="none" stroke="#38e1ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="40.9" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=0.00, y=0.2590</title></circle>
+<circle cx="82.6" cy="45.5" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=1.00, y=-0.0312</title></circle>
+<circle cx="110.3" cy="46.3" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=2.00, y=-0.0812</title></circle>
+<circle cx="137.9" cy="49.0" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=3.00, y=-0.2572</title></circle>
+<circle cx="165.5" cy="43.3" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=4.00, y=0.1056</title></circle>
+<circle cx="193.2" cy="45.2" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=5.00, y=-0.0178</title></circle>
+<circle cx="220.8" cy="43.3" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=6.00, y=0.1065</title></circle>
+<circle cx="248.4" cy="45.4" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=7.00, y=-0.0263</title></circle>
+<circle cx="276.1" cy="52.0" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=8.00, y=-0.4409</title></circle>
+<circle cx="303.7" cy="50.6" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=9.00, y=-0.3554</title></circle>
+<circle cx="331.3" cy="42.7" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=10.00, y=0.1432</title></circle>
+<circle cx="358.9" cy="40.8" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=11.00, y=0.2623</title></circle>
+<circle cx="386.6" cy="42.0" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=12.00, y=0.1869</title></circle>
+<circle cx="414.2" cy="50.4" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=13.00, y=-0.3437</title></circle>
+<circle cx="441.8" cy="41.5" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=14.00, y=0.2178</title></circle>
+<circle cx="469.5" cy="44.9" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=15.00, y=0.0015</title></circle>
+<circle cx="497.1" cy="47.5" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=16.00, y=-0.1622</title></circle>
+<circle cx="524.7" cy="42.8" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=17.00, y=0.1346</title></circle>
+<circle cx="552.4" cy="42.6" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=18.00, y=0.1499</title></circle>
+<circle cx="580.0" cy="47.4" r="3" fill="#38e1ff" opacity="0.7"><title>emb: x=19.00, y=-0.1564</title></circle>
+<line x1="590" y1="46" x2="608" y2="46" stroke="#38e1ff" stroke-width="2"/>
+<text x="612" y="50" fill="#aeb9d6" font-size="9">emb</text>
+<path d="M 55.0 46.6 L 82.6 41.2 L 110.3 42.0 L 137.9 44.5 L 165.5 49.3 L 193.2 46.7 L 220.8 44.9 L 248.4 43.0 L 276.1 50.3 L 303.7 43.3 L 331.3 47.6 L 358.9 51.6 L 386.6 43.3 L 414.2 43.4 L 441.8 41.6 L 469.5 42.1 L 497.1 47.9 L 524.7 43.3 L 552.4 46.4 L 580.0 40.0" fill="none" stroke="#ffb74a" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="46.6" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=0.00, y=-0.1015</title></circle>
+<circle cx="82.6" cy="41.2" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=1.00, y=0.2384</title></circle>
+<circle cx="110.3" cy="42.0" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=2.00, y=0.1880</title></circle>
+<circle cx="137.9" cy="44.5" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=3.00, y=0.0282</title></circle>
+<circle cx="165.5" cy="49.3" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=4.00, y=-0.2728</title></circle>
+<circle cx="193.2" cy="46.7" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=5.00, y=-0.1086</title></circle>
+<circle cx="220.8" cy="44.9" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=6.00, y=0.0013</title></circle>
+<circle cx="248.4" cy="43.0" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=7.00, y=0.1222</title></circle>
+<circle cx="276.1" cy="50.3" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=8.00, y=-0.3392</title></circle>
+<circle cx="303.7" cy="43.3" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=9.00, y=0.1056</title></circle>
+<circle cx="331.3" cy="47.6" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=10.00, y=-0.1659</title></circle>
+<circle cx="358.9" cy="51.6" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=11.00, y=-0.4177</title></circle>
+<circle cx="386.6" cy="43.3" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=12.00, y=0.1073</title></circle>
+<circle cx="414.2" cy="43.4" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=13.00, y=0.0973</title></circle>
+<circle cx="441.8" cy="41.6" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=14.00, y=0.2092</title></circle>
+<circle cx="469.5" cy="42.1" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=15.00, y=0.1836</title></circle>
+<circle cx="497.1" cy="47.9" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=16.00, y=-0.1824</title></circle>
+<circle cx="524.7" cy="43.3" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=17.00, y=0.1060</title></circle>
+<circle cx="552.4" cy="46.4" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=18.00, y=-0.0880</title></circle>
+<circle cx="580.0" cy="40.0" r="3" fill="#ffb74a" opacity="0.7"><title>attn.0: x=19.00, y=0.3130</title></circle>
+<line x1="590" y1="64" x2="608" y2="64" stroke="#ffb74a" stroke-width="2"/>
+<text x="612" y="68" fill="#aeb9d6" font-size="9">attn.0</text>
+<path d="M 55.0 46.8 L 82.6 46.6 L 110.3 45.2 L 137.9 41.3 L 165.5 44.0 L 193.2 47.4 L 220.8 48.4 L 248.4 42.6 L 276.1 44.1 L 303.7 46.5 L 331.3 43.8 L 358.9 46.3 L 386.6 41.6 L 414.2 42.9 L 441.8 46.9 L 469.5 47.1 L 497.1 41.8 L 524.7 44.8 L 552.4 42.6 L 580.0 41.3" fill="none" stroke="#3df5a6" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="46.8" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=0.00, y=-0.1179</title></circle>
+<circle cx="82.6" cy="46.6" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=1.00, y=-0.1032</title></circle>
+<circle cx="110.3" cy="45.2" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=2.00, y=-0.0162</title></circle>
+<circle cx="137.9" cy="41.3" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=3.00, y=0.2312</title></circle>
+<circle cx="165.5" cy="44.0" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=4.00, y=0.0581</title></circle>
+<circle cx="193.2" cy="47.4" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=5.00, y=-0.1562</title></circle>
+<circle cx="220.8" cy="48.4" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=6.00, y=-0.2194</title></circle>
+<circle cx="248.4" cy="42.6" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=7.00, y=0.1473</title></circle>
+<circle cx="276.1" cy="44.1" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=8.00, y=0.0526</title></circle>
+<circle cx="303.7" cy="46.5" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=9.00, y=-0.0959</title></circle>
+<circle cx="331.3" cy="43.8" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=10.00, y=0.0725</title></circle>
+<circle cx="358.9" cy="46.3" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=11.00, y=-0.0841</title></circle>
+<circle cx="386.6" cy="41.6" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=12.00, y=0.2136</title></circle>
+<circle cx="414.2" cy="42.9" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=13.00, y=0.1303</title></circle>
+<circle cx="441.8" cy="46.9" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=14.00, y=-0.1209</title></circle>
+<circle cx="469.5" cy="47.1" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=15.00, y=-0.1331</title></circle>
+<circle cx="497.1" cy="41.8" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=16.00, y=0.1978</title></circle>
+<circle cx="524.7" cy="44.8" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=17.00, y=0.0127</title></circle>
+<circle cx="552.4" cy="42.6" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=18.00, y=0.1496</title></circle>
+<circle cx="580.0" cy="41.3" r="3" fill="#3df5a6" opacity="0.7"><title>mlp.0: x=19.00, y=0.2301</title></circle>
+<line x1="590" y1="82" x2="608" y2="82" stroke="#3df5a6" stroke-width="2"/>
+<text x="612" y="86" fill="#aeb9d6" font-size="9">mlp.0</text>
+<path d="M 55.0 46.4 L 82.6 42.4 L 110.3 43.6 L 137.9 46.2 L 165.5 45.9 L 193.2 51.3 L 220.8 46.7 L 248.4 48.5 L 276.1 43.4 L 303.7 41.0 L 331.3 40.9 L 358.9 42.1 L 386.6 42.4 L 414.2 44.3 L 441.8 45.9 L 469.5 41.3 L 497.1 41.3 L 524.7 41.7 L 552.4 52.0 L 580.0 51.6" fill="none" stroke="#ff5d72" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="46.4" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=0.00, y=-0.0920</title></circle>
+<circle cx="82.6" cy="42.4" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=1.00, y=0.1604</title></circle>
+<circle cx="110.3" cy="43.6" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=2.00, y=0.0860</title></circle>
+<circle cx="137.9" cy="46.2" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=3.00, y=-0.0774</title></circle>
+<circle cx="165.5" cy="45.9" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=4.00, y=-0.0618</title></circle>
+<circle cx="193.2" cy="51.3" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=5.00, y=-0.3974</title></circle>
+<circle cx="220.8" cy="46.7" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=6.00, y=-0.1118</title></circle>
+<circle cx="248.4" cy="48.5" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=7.00, y=-0.2198</title></circle>
+<circle cx="276.1" cy="43.4" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=8.00, y=0.1015</title></circle>
+<circle cx="303.7" cy="41.0" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=9.00, y=0.2531</title></circle>
+<circle cx="331.3" cy="40.9" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=10.00, y=0.2541</title></circle>
+<circle cx="358.9" cy="42.1" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=11.00, y=0.1834</title></circle>
+<circle cx="386.6" cy="42.4" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=12.00, y=0.1613</title></circle>
+<circle cx="414.2" cy="44.3" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=13.00, y=0.0422</title></circle>
+<circle cx="441.8" cy="45.9" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=14.00, y=-0.0585</title></circle>
+<circle cx="469.5" cy="41.3" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=15.00, y=0.2280</title></circle>
+<circle cx="497.1" cy="41.3" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=16.00, y=0.2296</title></circle>
+<circle cx="524.7" cy="41.7" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=17.00, y=0.2084</title></circle>
+<circle cx="552.4" cy="52.0" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=18.00, y=-0.4426</title></circle>
+<circle cx="580.0" cy="51.6" r="3" fill="#ff5d72" opacity="0.7"><title>attn.1: x=19.00, y=-0.4207</title></circle>
+<line x1="590" y1="100" x2="608" y2="100" stroke="#ff5d72" stroke-width="2"/>
+<text x="612" y="104" fill="#aeb9d6" font-size="9">attn.1</text>
+<path d="M 55.0 180.0 L 82.6 179.4 L 110.3 178.6 L 137.9 179.5 L 165.5 179.9 L 193.2 179.6 L 220.8 179.3 L 248.4 179.9 L 276.1 179.1 L 303.7 178.9 L 331.3 178.9 L 358.9 179.3 L 386.6 178.8 L 414.2 179.0 L 441.8 179.5 L 469.5 179.5 L 497.1 179.2 L 524.7 179.6 L 552.4 178.9 L 580.0 179.5" fill="none" stroke="#a274ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="180.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=0.00, y=-8.5103</title></circle>
+<circle cx="82.6" cy="179.4" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=1.00, y=-8.4754</title></circle>
+<circle cx="110.3" cy="178.6" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=2.00, y=-8.4248</title></circle>
+<circle cx="137.9" cy="179.5" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=3.00, y=-8.4786</title></circle>
+<circle cx="165.5" cy="179.9" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=4.00, y=-8.5029</title></circle>
+<circle cx="193.2" cy="179.6" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=5.00, y=-8.4849</title></circle>
+<circle cx="220.8" cy="179.3" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=6.00, y=-8.4634</title></circle>
+<circle cx="248.4" cy="179.9" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=7.00, y=-8.5071</title></circle>
+<circle cx="276.1" cy="179.1" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=8.00, y=-8.4537</title></circle>
+<circle cx="303.7" cy="178.9" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=9.00, y=-8.4411</title></circle>
+<circle cx="331.3" cy="178.9" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=10.00, y=-8.4385</title></circle>
+<circle cx="358.9" cy="179.3" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=11.00, y=-8.4638</title></circle>
+<circle cx="386.6" cy="178.8" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=12.00, y=-8.4374</title></circle>
+<circle cx="414.2" cy="179.0" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=13.00, y=-8.4463</title></circle>
+<circle cx="441.8" cy="179.5" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=14.00, y=-8.4771</title></circle>
+<circle cx="469.5" cy="179.5" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=15.00, y=-8.4780</title></circle>
+<circle cx="497.1" cy="179.2" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=16.00, y=-8.4622</title></circle>
+<circle cx="524.7" cy="179.6" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=17.00, y=-8.4850</title></circle>
+<circle cx="552.4" cy="178.9" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=18.00, y=-8.4402</title></circle>
+<circle cx="580.0" cy="179.5" r="3" fill="#a274ff" opacity="0.7"><title>mlp.1: x=19.00, y=-8.4783</title></circle>
+<line x1="590" y1="118" x2="608" y2="118" stroke="#a274ff" stroke-width="2"/>
+<text x="612" y="122" fill="#aeb9d6" font-size="9">mlp.1</text>
+<path d="M 55.0 44.6 L 82.6 42.5 L 110.3 40.6 L 137.9 50.3 L 165.5 43.3 L 193.2 43.2 L 220.8 40.5 L 248.4 47.9 L 276.1 49.0 L 303.7 48.5 L 331.3 50.4 L 358.9 43.6 L 386.6 52.4 L 414.2 44.7 L 441.8 43.7 L 469.5 42.0 L 497.1 46.9 L 524.7 42.1 L 552.4 45.7 L 580.0 41.5" fill="none" stroke="#2ee6c8" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="44.6" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=0.00, y=0.0200</title></circle>
+<circle cx="82.6" cy="42.5" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=1.00, y=0.1570</title></circle>
+<circle cx="110.3" cy="40.6" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=2.00, y=0.2778</title></circle>
+<circle cx="137.9" cy="50.3" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=3.00, y=-0.3356</title></circle>
+<circle cx="165.5" cy="43.3" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=4.00, y=0.1054</title></circle>
+<circle cx="193.2" cy="43.2" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=5.00, y=0.1124</title></circle>
+<circle cx="220.8" cy="40.5" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=6.00, y=0.2825</title></circle>
+<circle cx="248.4" cy="47.9" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=7.00, y=-0.1875</title></circle>
+<circle cx="276.1" cy="49.0" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=8.00, y=-0.2564</title></circle>
+<circle cx="303.7" cy="48.5" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=9.00, y=-0.2243</title></circle>
+<circle cx="331.3" cy="50.4" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=10.00, y=-0.3401</title></circle>
+<circle cx="358.9" cy="43.6" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=11.00, y=0.0871</title></circle>
+<circle cx="386.6" cy="52.4" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=12.00, y=-0.4703</title></circle>
+<circle cx="414.2" cy="44.7" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=13.00, y=0.0194</title></circle>
+<circle cx="441.8" cy="43.7" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=14.00, y=0.0829</title></circle>
+<circle cx="469.5" cy="42.0" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=15.00, y=0.1842</title></circle>
+<circle cx="497.1" cy="46.9" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=16.00, y=-0.1192</title></circle>
+<circle cx="524.7" cy="42.1" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=17.00, y=0.1789</title></circle>
+<circle cx="552.4" cy="45.7" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=18.00, y=-0.0461</title></circle>
+<circle cx="580.0" cy="41.5" r="3" fill="#2ee6c8" opacity="0.7"><title>attn.2: x=19.00, y=0.2163</title></circle>
+<line x1="590" y1="136" x2="608" y2="136" stroke="#2ee6c8" stroke-width="2"/>
+<text x="612" y="140" fill="#aeb9d6" font-size="9">attn.2</text>
+<path d="M 55.0 42.9 L 82.6 50.9 L 110.3 49.2 L 137.9 50.1 L 165.5 40.9 L 193.2 45.5 L 220.8 51.4 L 248.4 52.2 L 276.1 42.4 L 303.7 40.7 L 331.3 49.4 L 358.9 44.0 L 386.6 48.5 L 414.2 43.3 L 441.8 52.7 L 469.5 42.3 L 497.1 46.6 L 524.7 41.9 L 552.4 45.0 L 580.0 51.9" fill="none" stroke="#ffd166" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="42.9" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=0.00, y=0.1287</title></circle>
+<circle cx="82.6" cy="50.9" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=1.00, y=-0.3729</title></circle>
+<circle cx="110.3" cy="49.2" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=2.00, y=-0.2648</title></circle>
+<circle cx="137.9" cy="50.1" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=3.00, y=-0.3265</title></circle>
+<circle cx="165.5" cy="40.9" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=4.00, y=0.2560</title></circle>
+<circle cx="193.2" cy="45.5" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=5.00, y=-0.0333</title></circle>
+<circle cx="220.8" cy="51.4" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=6.00, y=-0.4062</title></circle>
+<circle cx="248.4" cy="52.2" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=7.00, y=-0.4571</title></circle>
+<circle cx="276.1" cy="42.4" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=8.00, y=0.1632</title></circle>
+<circle cx="303.7" cy="40.7" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=9.00, y=0.2703</title></circle>
+<circle cx="331.3" cy="49.4" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=10.00, y=-0.2801</title></circle>
+<circle cx="358.9" cy="44.0" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=11.00, y=0.0637</title></circle>
+<circle cx="386.6" cy="48.5" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=12.00, y=-0.2255</title></circle>
+<circle cx="414.2" cy="43.3" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=13.00, y=0.1021</title></circle>
+<circle cx="441.8" cy="52.7" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=14.00, y=-0.4883</title></circle>
+<circle cx="469.5" cy="42.3" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=15.00, y=0.1666</title></circle>
+<circle cx="497.1" cy="46.6" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=16.00, y=-0.1016</title></circle>
+<circle cx="524.7" cy="41.9" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=17.00, y=0.1905</title></circle>
+<circle cx="552.4" cy="45.0" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=18.00, y=-0.0034</title></circle>
+<circle cx="580.0" cy="51.9" r="3" fill="#ffd166" opacity="0.7"><title>mlp.2: x=19.00, y=-0.4346</title></circle>
+<line x1="590" y1="154" x2="608" y2="154" stroke="#ffd166" stroke-width="2"/>
+<text x="612" y="158" fill="#aeb9d6" font-size="9">mlp.2</text>
+<path d="M 55.0 42.8 L 82.6 42.9 L 110.3 47.4 L 137.9 41.0 L 165.5 49.9 L 193.2 41.8 L 220.8 43.5 L 248.4 52.1 L 276.1 40.9 L 303.7 44.1 L 331.3 47.2 L 358.9 43.4 L 386.6 43.3 L 414.2 45.6 L 441.8 42.2 L 469.5 47.2 L 497.1 45.0 L 524.7 47.6 L 552.4 40.7 L 580.0 51.8" fill="none" stroke="#6cb8ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="42.8" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=0.00, y=0.1358</title></circle>
+<circle cx="82.6" cy="42.9" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=1.00, y=0.1284</title></circle>
+<circle cx="110.3" cy="47.4" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=2.00, y=-0.1543</title></circle>
+<circle cx="137.9" cy="41.0" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=3.00, y=0.2515</title></circle>
+<circle cx="165.5" cy="49.9" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=4.00, y=-0.3079</title></circle>
+<circle cx="193.2" cy="41.8" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=5.00, y=0.1968</title></circle>
+<circle cx="220.8" cy="43.5" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=6.00, y=0.0896</title></circle>
+<circle cx="248.4" cy="52.1" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=7.00, y=-0.4473</title></circle>
+<circle cx="276.1" cy="40.9" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=8.00, y=0.2576</title></circle>
+<circle cx="303.7" cy="44.1" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=9.00, y=0.0516</title></circle>
+<circle cx="331.3" cy="47.2" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=10.00, y=-0.1382</title></circle>
+<circle cx="358.9" cy="43.4" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=11.00, y=0.0968</title></circle>
+<circle cx="386.6" cy="43.3" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=12.00, y=0.1028</title></circle>
+<circle cx="414.2" cy="45.6" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=13.00, y=-0.0375</title></circle>
+<circle cx="441.8" cy="42.2" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=14.00, y=0.1745</title></circle>
+<circle cx="469.5" cy="47.2" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=15.00, y=-0.1434</title></circle>
+<circle cx="497.1" cy="45.0" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=16.00, y=-0.0029</title></circle>
+<circle cx="524.7" cy="47.6" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=17.00, y=-0.1664</title></circle>
+<circle cx="552.4" cy="40.7" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=18.00, y=0.2715</title></circle>
+<circle cx="580.0" cy="51.8" r="3" fill="#6cb8ff" opacity="0.7"><title>head: x=19.00, y=-0.4289</title></circle>
+<line x1="590" y1="172" x2="608" y2="172" stroke="#6cb8ff" stroke-width="2"/>
+<text x="612" y="176" fill="#aeb9d6" font-size="9">head</text>
+</svg></div>
+  </div>
+</div>
+<div class="section" id="attention-head-analysis">
+  <div class="section-header">
+    <span class="sx">§08</span>
+    <span class="icon" aria-hidden="true">◉</span>
+    <h2>Attention Head Analysis</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    
+    <table><thead><tr><th>Layer</th><th>Head</th><th>Max weight</th><th>Entropy</th><th>Ghost score</th><th>Status</th><th>Obs</th></tr></thead><tbody><tr><td>attn.0</td><td>3</td><td>0.1250</td><td>2.079</td><td>0.17</td><td><span class="badge badge-active">active</span></td><td>10</td></tr><tr><td>attn.1</td><td>3</td><td>0.1250</td><td>2.079</td><td>0.17</td><td><span class="badge badge-active">active</span></td><td>10</td></tr><tr><td>attn.2</td><td>3</td><td>0.1250</td><td>2.079</td><td>0.17</td><td><span class="badge badge-active">active</span></td><td>10</td></tr><tr><td>attn.0</td><td>0</td><td>0.5751</td><td>1.691</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>10</td></tr><tr><td>attn.0</td><td>1</td><td>0.5180</td><td>1.870</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>10</td></tr><tr><td>attn.0</td><td>2</td><td>0.3582</td><td>1.952</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>10</td></tr><tr><td>attn.1</td><td>0</td><td>0.6287</td><td>1.721</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>10</td></tr><tr><td>attn.1</td><td>1</td><td>0.5469</td><td>1.864</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>10</td></tr><tr><td>attn.1</td><td>2</td><td>0.4560</td><td>1.937</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>10</td></tr><tr><td>attn.2</td><td>0</td><td>0.5996</td><td>1.699</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>10</td></tr><tr><td>attn.2</td><td>1</td><td>0.4294</td><td>1.884</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>10</td></tr><tr><td>attn.2</td><td>2</td><td>0.4190</td><td>1.937</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>10</td></tr></tbody></table>
+  </div>
+</div>
+<div class="section" id="dead-parameters">
+  <div class="section-header">
+    <span class="sx">§09</span>
+    <span class="icon" aria-hidden="true">▽</span>
+    <h2>Dead Parameters</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    
+    <table><thead><tr><th>Layer</th><th>Param</th><th>Mean magnitude</th></tr></thead><tbody><tr><td>mlp.1</td><td>W</td><td>3.30e-09</td></tr></tbody></table>
+  </div>
+</div>
+<div class="section" id="silent-entities">
+  <div class="section-header">
+    <span class="sx">§10</span>
+    <span class="icon" aria-hidden="true">◍</span>
+    <h2>Silent Entities</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    
+    <table><thead><tr><th>Name</th><th>Type</th><th>Silence ratio</th><th>Observations</th><th>Status</th></tr></thead><tbody><tr><td>mlp.1:0.0</td><td>neuron</td><td>1.000</td><td>4</td><td><span class="badge badge-active">active</span></td></tr><tr><td>mlp.1:1.0</td><td>neuron</td><td>1.000</td><td>4</td><td><span class="badge badge-active">active</span></td></tr><tr><td>mlp.1:2.0</td><td>neuron</td><td>1.000</td><td>4</td><td><span class="badge badge-active">active</span></td></tr><tr><td>mlp.1:3.0</td><td>neuron</td><td>1.000</td><td>4</td><td><span class="badge badge-active">active</span></td></tr><tr><td>mlp.1:4.0</td><td>neuron</td><td>1.000</td><td>4</td><td><span class="badge badge-active">active</span></td></tr><tr><td>mlp.1:5.0</td><td>neuron</td><td>1.000</td><td>4</td><td><span class="badge badge-active">active</span></td></tr><tr><td>mlp.1:6.0</td><td>neuron</td><td>1.000</td><td>3</td><td><span class="badge badge-active">active</span></td></tr><tr><td>mlp.1:7.0</td><td>neuron</td><td>1.000</td><td>3</td><td><span class="badge badge-active">active</span></td></tr><tr><td>emb:4.0</td><td>neuron</td><td>0.750</td><td>4</td><td><span class="badge badge-active">active</span></td></tr><tr><td>mlp.0:2.0</td><td>neuron</td><td>0.500</td><td>4</td><td><span class="badge badge-active">active</span></td></tr><tr><td>head:4.0</td><td>neuron</td><td>0.500</td><td>4</td><td><span class="badge badge-active">active</span></td></tr><tr><td>mlp.1:0</td><td>layer</td><td>1.000</td><td>4</td><td><span class="badge badge-shadow">silent</span></td></tr><tr><td>mlp.1:1</td><td>layer</td><td>1.000</td><td>4</td><td><span class="badge badge-shadow">silent</span></td></tr><tr><td>mlp.1:2</td><td>layer</td><td>1.000</td><td>4</td><td><span class="badge badge-shadow">silent</span></td></tr><tr><td>mlp.1:3</td><td>layer</td><td>1.000</td><td>4</td><td><span class="badge badge-shadow">silent</span></td></tr><tr><td>mlp.1:4</td><td>layer</td><td>1.000</td><td>4</td><td><span class="badge badge-shadow">silent</span></td></tr><tr><td>mlp.1:5</td><td>layer</td><td>1.000</td><td>4</td><td><span class="badge badge-shadow">silent</span></td></tr><tr><td>mlp.1:6</td><td>layer</td><td>1.000</td><td>3</td><td><span class="badge badge-shadow">silent</span></td></tr><tr><td>mlp.1:7</td><td>layer</td><td>1.000</td><td>3</td><td><span class="badge badge-shadow">silent</span></td></tr><tr><td>emb:4</td><td>layer</td><td>0.750</td><td>4</td><td><span class="badge badge-shadow">silent</span></td></tr><tr><td>mlp.0:2</td><td>layer</td><td>0.500</td><td>4</td><td><span class="badge badge-shadow">silent</span></td></tr><tr><td>head:4</td><td>layer</td><td>0.500</td><td>4</td><td><span class="badge badge-shadow">silent</span></td></tr></tbody></table>
+  </div>
+</div>
+  <div class="foot">
+    <span>ONEPAI <span class="ok">●</span> introspection engine</span>
+    <span>//</span><span>generated 2026-06-13 13:57:19</span>
+    <span>//</span><span>10 modules</span>
+  </div>
+</main>
+<script>
+(function(){
+  var c=document.getElementById('bg-canvas'); if(c){
+    var ctx=c.getContext('2d'), N=56, nodes=[], DPR=Math.min(window.devicePixelRatio||1,2);
+    function resize(){ c.width=innerWidth*DPR; c.height=innerHeight*DPR; ctx.setTransform(DPR,0,0,DPR,0,0); }
+    resize(); addEventListener('resize',resize);
+    for(var i=0;i<N;i++){ nodes.push({x:Math.random()*innerWidth,y:Math.random()*innerHeight,vx:(Math.random()-0.5)*0.28,vy:(Math.random()-0.5)*0.28}); }
+    function tick(){
+      ctx.clearRect(0,0,innerWidth,innerHeight);
+      for(var i=0;i<N;i++){ var n=nodes[i]; n.x+=n.vx; n.y+=n.vy;
+        if(n.x<0||n.x>innerWidth)n.vx*=-1; if(n.y<0||n.y>innerHeight)n.vy*=-1; }
+      for(var i=0;i<N;i++) for(var j=i+1;j<N;j++){
+        var a=nodes[i],b=nodes[j],dx=a.x-b.x,dy=a.y-b.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d<150){ ctx.strokeStyle='rgba(56,225,255,'+(0.11*(1-d/150))+')'; ctx.lineWidth=1;
+          ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); } }
+      for(var i=0;i<N;i++){ var n=nodes[i]; ctx.fillStyle='rgba(130,180,255,0.55)';
+        ctx.beginPath(); ctx.arc(n.x,n.y,1.5,0,6.2832); ctx.fill(); }
+      requestAnimationFrame(tick);
+    } tick();
+  }
+  function easeOut(t){ return 1-Math.pow(1-t,3); }
+  document.querySelectorAll('[data-count]').forEach(function(el){
+    var target=parseFloat(el.getAttribute('data-count')), dec=parseInt(el.getAttribute('data-dec')||'0',10), t0=null;
+    function step(ts){ if(!t0)t0=ts; var p=Math.min((ts-t0)/900,1);
+      el.textContent=(target*easeOut(p)).toFixed(dec); if(p<1)requestAnimationFrame(step); }
+    requestAnimationFrame(step);
+  });
+  var io=new IntersectionObserver(function(es){ es.forEach(function(e){
+    if(e.isIntersecting){ e.target.classList.add('visible'); io.unobserve(e.target); } }); },{threshold:0.06});
+  document.querySelectorAll('.section').forEach(function(s,i){ s.style.transitionDelay=((i%3)*70)+'ms'; io.observe(s); });
+  document.querySelectorAll('.section-header').forEach(function(h){
+    h.addEventListener('click',function(){ var b=h.nextElementSibling,t=h.querySelector('.toggle');
+      b.classList.toggle('collapsed'); if(t)t.textContent=b.classList.contains('collapsed')?'[+]':'[-]'; }); });
+  var secs=document.querySelectorAll('.section[id]'), navs=document.querySelectorAll('#sidebar nav a');
+  addEventListener('scroll',function(){ var y=scrollY;
+    secs.forEach(function(s){ var top=s.offsetTop-90, bot=top+s.offsetHeight;
+      if(y>=top&&y<bot) navs.forEach(function(a){ a.classList.toggle('active',a.getAttribute('href')==='#'+s.id); }); }); },{passive:true});
+  navs.forEach(function(a){ a.addEventListener('click',function(e){ var t=document.querySelector(a.getAttribute('href'));
+    if(t){ e.preventDefault(); t.scrollIntoView({behavior:'smooth',block:'start'}); } }); });
+  function clock(){ var el=document.getElementById('clock'); if(el) el.textContent=new Date().toISOString().slice(11,19)+' UTC'; }
+  clock(); setInterval(clock,1000);
+  var boot=document.getElementById('boot');
+  if(boot){ var msg=boot.getAttribute('data-msg')||'', i=0;
+    (function type(){ if(i<=msg.length){ boot.innerHTML=msg.slice(0,i)+'<span style="color:#3df5a6">_</span>'; i++; setTimeout(type,16); }
+      else boot.innerHTML=msg+' <span class="ok">[ ok ]</span>'; })(); }
+})();
+</script>
+</body>
+</html>

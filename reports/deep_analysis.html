@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ONEPAI · Deep Analysis (L1+L4+L5)</title>
+  <style>
+:root {
+  --bg-0:#04060d; --bg-1:#070b16; --panel:rgba(16,22,40,0.55);
+  --panel-solid:#0b1120; --brd:rgba(120,165,255,0.16); --brd-glow:rgba(80,200,255,0.40);
+  --cyan:#38e1ff; --violet:#a274ff; --green:#3df5a6; --amber:#ffb74a; --red:#ff5d72;
+  --ghost:#8090b0; --text:#dfe8ff; --muted:#8493b8; --mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { scroll-behavior:smooth; }
+body { font-family:var(--sans); background:var(--bg-0); color:var(--text);
+  font-size:14px; line-height:1.55; -webkit-font-smoothing:antialiased; overflow-x:hidden; }
+body::before { content:""; position:fixed; inset:0; z-index:-2;
+  background:
+    radial-gradient(1200px 700px at 78% -8%, rgba(60,120,255,0.10), transparent 60%),
+    radial-gradient(900px 600px at 8% 108%, rgba(150,90,255,0.10), transparent 55%),
+    var(--bg-0);
+  background-attachment:fixed; }
+#bg-canvas { position:fixed; inset:0; z-index:-1; opacity:0.55; }
+.scanlines { position:fixed; inset:0; z-index:1; pointer-events:none; opacity:0.35;
+  background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,0.18) 3px); }
+a { color:var(--cyan); text-decoration:none; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+
+/* status bar */
+#statusbar { position:fixed; top:0; left:0; right:0; height:36px; z-index:200;
+  display:flex; align-items:center; gap:16px; padding:0 18px;
+  background:rgba(6,10,20,0.82); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--brd); font-family:var(--mono); font-size:11px; letter-spacing:0.08em; }
+#statusbar .live-dot { width:8px; height:8px; border-radius:50%; background:var(--green);
+  box-shadow:0 0 10px var(--green); animation:pulse 1.8s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.45;transform:scale(0.7);} }
+#statusbar .sb-brand { color:var(--cyan); font-weight:500; text-shadow:0 0 14px rgba(56,225,255,0.6); }
+#statusbar .sb-sep { color:var(--muted); }
+#statusbar .sb-meta { color:var(--muted); }
+#statusbar #clock { margin-left:auto; color:var(--text); }
+
+/* sidebar */
+#sidebar { position:fixed; top:36px; left:0; bottom:0; width:240px; z-index:100; overflow-y:auto;
+  background:rgba(7,11,22,0.62); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border-right:1px solid var(--brd); padding-bottom:30px; }
+#sidebar .brand-block { padding:22px 20px 16px; border-bottom:1px solid var(--brd); }
+#sidebar .brand-glyph { font-family:var(--mono); font-size:26px; color:var(--cyan);
+  text-shadow:0 0 18px rgba(56,225,255,0.7); animation:spin 9s linear infinite; display:inline-block; }
+@keyframes spin { to { transform:rotate(360deg); } }
+#sidebar .brand-name { font-size:15px; font-weight:500; letter-spacing:0.22em; margin-top:6px; }
+#sidebar .brand-sub { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:0.18em; margin-top:3px; }
+#sidebar nav { padding:12px 0; }
+#sidebar nav a { display:flex; align-items:center; gap:11px; padding:10px 20px; color:var(--muted);
+  font-size:12.5px; border-left:2px solid transparent; transition:all .18s; position:relative; }
+#sidebar nav a .nav-ix { font-family:var(--mono); font-size:10px; color:var(--brd-glow); min-width:22px; }
+#sidebar nav a:hover { color:var(--text); background:rgba(56,225,255,0.05); }
+#sidebar nav a.active { color:var(--cyan); background:rgba(56,225,255,0.08);
+  border-left-color:var(--cyan); box-shadow:inset 0 0 22px rgba(56,225,255,0.08); }
+#sidebar nav a.active .nav-ix { color:var(--cyan); }
+
+/* main */
+#main { margin-left:240px; padding:60px 40px 80px; max-width:1180px; position:relative; z-index:2; }
+.hero { margin-bottom:30px; }
+.hero h1 { font-size:27px; font-weight:500; letter-spacing:0.01em;
+  text-shadow:0 0 26px rgba(56,225,255,0.25); }
+.hero h1 .accent { color:var(--cyan); }
+.hero .boot { font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:9px;
+  border-left:2px solid var(--cyan); padding-left:11px; min-height:17px; }
+.hero .boot .ok { color:var(--green); }
+
+/* cards */
+.cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(176px,1fr)); gap:14px; margin-bottom:30px; }
+.card { position:relative; background:var(--panel); border:1px solid var(--brd); border-radius:12px;
+  padding:18px 16px 16px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); overflow:hidden; }
+.card::before { content:""; position:absolute; top:0; left:0; right:0; height:2px;
+  background:var(--cyan); box-shadow:0 0 16px var(--cyan); opacity:0.9; }
+.card.c-danger::before { background:var(--red); box-shadow:0 0 16px var(--red); }
+.card.c-warn::before { background:var(--amber); box-shadow:0 0 16px var(--amber); }
+.card.c-ok::before { background:var(--green); box-shadow:0 0 16px var(--green); }
+.card.c-violet::before { background:var(--violet); box-shadow:0 0 16px var(--violet); }
+.card .card-value { font-family:var(--mono); font-size:30px; font-weight:500; line-height:1;
+  color:var(--text); text-shadow:0 0 18px rgba(120,180,255,0.25); }
+.card .card-label { font-size:10.5px; color:var(--muted); margin-top:9px;
+  text-transform:uppercase; letter-spacing:0.12em; }
+.card .card-corner { position:absolute; bottom:8px; right:10px; font-family:var(--mono);
+  font-size:9px; color:var(--brd-glow); opacity:0.7; }
+
+/* sections */
+.section { background:var(--panel); border:1px solid var(--brd); border-radius:14px;
+  margin-bottom:22px; overflow:hidden; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  opacity:0; transform:translateY(18px); transition:opacity .6s ease, transform .6s ease; position:relative; }
+.section.visible { opacity:1; transform:translateY(0); }
+.section::before, .section::after { content:""; position:absolute; width:14px; height:14px; pointer-events:none; opacity:0.6; }
+.section::before { top:8px; left:8px; border-top:1.5px solid var(--brd-glow); border-left:1.5px solid var(--brd-glow); }
+.section::after { bottom:8px; right:8px; border-bottom:1.5px solid var(--brd-glow); border-right:1.5px solid var(--brd-glow); }
+.section-header { padding:15px 22px; cursor:pointer; display:flex; align-items:center; gap:13px;
+  border-bottom:1px solid var(--brd); user-select:none; transition:background .18s; }
+.section-header:hover { background:rgba(56,225,255,0.04); }
+.section-header .sx { font-family:var(--mono); font-size:11px; color:var(--cyan); letter-spacing:0.1em; }
+.section-header .icon { font-size:17px; filter:drop-shadow(0 0 8px rgba(56,225,255,0.5)); }
+.section-header h2 { font-size:16px; font-weight:500; flex:1; letter-spacing:0.01em; }
+.section-header .toggle { font-family:var(--mono); font-size:11px; color:var(--muted); }
+.section-body { padding:22px; overflow-x:auto; }
+.section-body.collapsed { display:none; }
+.svg-wrap { overflow-x:auto; }
+.svg-wrap svg { max-width:100%; height:auto; display:block; }
+
+/* note */
+.note { background:rgba(56,225,255,0.06); border-left:2px solid var(--cyan); padding:10px 15px;
+  font-size:12.5px; color:var(--text); border-radius:0 7px 7px 0; margin-bottom:15px; line-height:1.6; }
+
+/* tables */
+table { width:100%; border-collapse:collapse; font-size:12.5px; font-family:var(--mono); }
+th { padding:10px 13px; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.1em;
+  color:var(--cyan); border-bottom:1px solid var(--brd-glow); background:rgba(56,225,255,0.04); }
+td { padding:9px 13px; border-bottom:1px solid rgba(120,165,255,0.07); color:var(--text); }
+tr:hover td { background:rgba(56,225,255,0.04); }
+.badge { display:inline-block; padding:2px 9px; border-radius:20px; font-size:10px; font-weight:500;
+  font-family:var(--mono); letter-spacing:0.04em; }
+.badge-ghost { background:rgba(128,144,176,0.16); color:#aab6d4; border:1px solid rgba(128,144,176,0.35); }
+.badge-shadow { background:rgba(255,183,74,0.13); color:var(--amber); border:1px solid rgba(255,183,74,0.4); }
+.badge-dead { background:rgba(255,93,114,0.13); color:var(--red); border:1px solid rgba(255,93,114,0.42); }
+.badge-active { background:rgba(61,245,166,0.12); color:var(--green); border:1px solid rgba(61,245,166,0.4); }
+
+/* footer */
+.foot { margin-top:34px; padding-top:18px; border-top:1px solid var(--brd);
+  font-family:var(--mono); font-size:10.5px; color:var(--muted); letter-spacing:0.08em;
+  display:flex; gap:14px; flex-wrap:wrap; }
+.foot .ok { color:var(--green); }
+
+@media (max-width:820px) {
+  #sidebar { display:none; }
+  #main { margin-left:0; padding:54px 16px 60px; }
+}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+<div class="scanlines" aria-hidden="true"></div>
+<h2 class="sr-only">ONEPAI · Deep Analysis (L1+L4+L5): report di introspezione del modello tiny-4L-6H-48d.</h2>
+
+<header id="statusbar">
+  <span class="live-dot" aria-hidden="true"></span>
+  <span class="sb-brand">ONEPAI</span>
+  <span class="sb-sep">//</span>
+  <span class="sb-meta">neural observatory</span>
+  <span class="sb-sep">//</span>
+  <span class="sb-meta">target: tiny-4L-6H-48d</span>
+  <span id="clock">--:--:-- UTC</span>
+</header>
+
+<aside id="sidebar">
+  <div class="brand-block">
+    <span class="brand-glyph" aria-hidden="true">◈</span>
+    <div class="brand-name">ONEPAI</div>
+    <div class="brand-sub">INTROSPECTION v0.2</div>
+  </div>
+  <nav><a href="#l1-·-silence-map"><span class="nav-ix">01</span><span class="icon" aria-hidden="true">◍</span>L1 · Silence Map</a>
+<a href="#l1-·-activation-timeline"><span class="nav-ix">02</span><span class="icon" aria-hidden="true">◭</span>L1 · Activation Timeline</a>
+<a href="#l1-·-logit-lens-(real)"><span class="nav-ix">03</span><span class="icon" aria-hidden="true">◎</span>L1 · Logit Lens (real)</a>
+<a href="#l5-·-ablation-sweep"><span class="nav-ix">04</span><span class="icon" aria-hidden="true">▽</span>L5 · Ablation Sweep</a>
+<a href="#l5-·-steering-sweep"><span class="nav-ix">05</span><span class="icon" aria-hidden="true">◈</span>L5 · Steering Sweep</a>
+<a href="#l4-·-absence-—-dead-vs-suppresse"><span class="nav-ix">06</span><span class="icon" aria-hidden="true">◌</span>L4 · Absence — dead vs suppressed</a>
+<a href="#l4-·-crushed-predictions-(quasi-"><span class="nav-ix">07</span><span class="icon" aria-hidden="true">◑</span>L4 · Crushed predictions (quasi-detti)</a>
+<a href="#l5-·-head-ablation-(ranked)"><span class="nav-ix">08</span><span class="icon" aria-hidden="true">◉</span>L5 · Head ablation (ranked)</a>
+<a href="#attention-head-analysis"><span class="nav-ix">09</span><span class="icon" aria-hidden="true">◉</span>Attention Head Analysis</a></nav>
+</aside>
+
+<main id="main">
+  <div class="hero">
+    <h1>ONEPAI · Deep Analysis (L1+L4+L5)</h1>
+    <div class="boot" id="boot" data-msg="initializing shadow map :: tracing silence :: target=tiny-4L-6H-48d :: 9 modules online"></div>
+  </div>
+  <div class="cards"><div class="card "><span class="card-value" data-count="8.0" data-dec="0">0</span><div class="card-label">Layers</div><div class="card-corner">#01</div></div><div class="card c-danger"><span class="card-value" data-count="2.0" data-dec="0">0</span><div class="card-label">Dead</div><div class="card-corner">#02</div></div><div class="card "><span class="card-value" data-count="2.0" data-dec="0">0</span><div class="card-label">Suppressed</div><div class="card-corner">#03</div></div><div class="card "><span class="card-value" data-count="1.0" data-dec="0">0</span><div class="card-label">Inert heads</div><div class="card-corner">#04</div></div><div class="card c-ok"><span class="card-value" data-count="20.0" data-dec="0">0</span><div class="card-label">Crushed tokens</div><div class="card-corner">#05</div></div><div class="card "><span class="card-value" data-count="24.0" data-dec="0">0</span><div class="card-label">Attention heads</div><div class="card-corner">#06</div></div><div class="card c-violet"><span class="card-value" data-count="0.0" data-dec="0">0</span><div class="card-label">Ghost heads</div><div class="card-corner">#07</div></div></div>
+  
+<div class="section" id="l1-·-silence-map">
+  <div class="section-header">
+    <span class="sx">§01</span>
+    <span class="icon" aria-hidden="true">◍</span>
+    <h2>L1 · Silence Map</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">Neuroni silenziosi su attivazioni MLP reali (verde scuro = morto).</div>
+    <div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="580" height="270" font-family="ui-monospace, monospace" font-size="10">
+<text x="290" y="25" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Silence Map — tiny-4L-6H-48d</text>
+<text x="90" y="85" text-anchor="middle" transform="rotate(-45 90 85)" fill="#8493b8">0</text>
+<text x="110" y="85" text-anchor="middle" transform="rotate(-45 110 85)" fill="#8493b8">1</text>
+<text x="130" y="85" text-anchor="middle" transform="rotate(-45 130 85)" fill="#8493b8">2</text>
+<text x="150" y="85" text-anchor="middle" transform="rotate(-45 150 85)" fill="#8493b8">3</text>
+<text x="170" y="85" text-anchor="middle" transform="rotate(-45 170 85)" fill="#8493b8">4</text>
+<text x="190" y="85" text-anchor="middle" transform="rotate(-45 190 85)" fill="#8493b8">5</text>
+<text x="210" y="85" text-anchor="middle" transform="rotate(-45 210 85)" fill="#8493b8">6</text>
+<text x="230" y="85" text-anchor="middle" transform="rotate(-45 230 85)" fill="#8493b8">7</text>
+<text x="250" y="85" text-anchor="middle" transform="rotate(-45 250 85)" fill="#8493b8">8</text>
+<text x="270" y="85" text-anchor="middle" transform="rotate(-45 270 85)" fill="#8493b8">9</text>
+<text x="290" y="85" text-anchor="middle" transform="rotate(-45 290 85)" fill="#8493b8">10</text>
+<text x="310" y="85" text-anchor="middle" transform="rotate(-45 310 85)" fill="#8493b8">11</text>
+<text x="330" y="85" text-anchor="middle" transform="rotate(-45 330 85)" fill="#8493b8">12</text>
+<text x="350" y="85" text-anchor="middle" transform="rotate(-45 350 85)" fill="#8493b8">13</text>
+<text x="370" y="85" text-anchor="middle" transform="rotate(-45 370 85)" fill="#8493b8">14</text>
+<text x="390" y="85" text-anchor="middle" transform="rotate(-45 390 85)" fill="#8493b8">15</text>
+<text x="410" y="85" text-anchor="middle" transform="rotate(-45 410 85)" fill="#8493b8">16</text>
+<text x="430" y="85" text-anchor="middle" transform="rotate(-45 430 85)" fill="#8493b8">17</text>
+<text x="450" y="85" text-anchor="middle" transform="rotate(-45 450 85)" fill="#8493b8">18</text>
+<text x="470" y="85" text-anchor="middle" transform="rotate(-45 470 85)" fill="#8493b8">19</text>
+<text x="490" y="85" text-anchor="middle" transform="rotate(-45 490 85)" fill="#8493b8">20</text>
+<text x="510" y="85" text-anchor="middle" transform="rotate(-45 510 85)" fill="#8493b8">21</text>
+<text x="530" y="85" text-anchor="middle" transform="rotate(-45 530 85)" fill="#8493b8">22</text>
+<text x="550" y="85" text-anchor="middle" transform="rotate(-45 550 85)" fill="#8493b8">23</text>
+<rect x="80" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="90" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="100" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="110" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="120" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="130" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="140" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="150" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="160" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="170" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="180" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="190" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="200" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="210" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="220" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="230" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="240" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="250" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="260" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="270" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="280" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="290" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="300" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="310" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="320" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="330" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="340" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="350" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="360" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="370" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="380" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="390" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="400" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="410" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="420" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="430" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="440" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="450" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="460" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="470" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="480" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="490" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="500" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="510" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="520" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="530" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="540" y="90" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="550" y="104" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="104" text-anchor="end" fill="#9fb0d6">blocks.0.mlp</text>
+<rect x="80" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="90" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="100" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="110" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="120" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="130" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="140" y="110" width="20" height="20" fill="#002d00" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>1.0000</title></rect>
+<text x="150" y="124" text-anchor="middle" fill="#e8eeff" font-size="8">1.0</text>
+<rect x="160" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="170" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="180" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="190" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="200" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="210" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="220" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="230" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="240" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="250" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="260" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="270" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="280" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="290" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="300" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="310" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="320" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="330" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="340" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="350" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="360" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="370" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="380" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="390" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="400" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="410" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="420" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="430" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="440" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="450" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="460" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="470" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="480" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="490" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="500" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="510" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="520" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="530" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="540" y="110" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="550" y="124" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="124" text-anchor="end" fill="#9fb0d6">blocks.0.att</text>
+<rect x="80" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="90" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="100" y="130" width="20" height="20" fill="#dff3df" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0600</title></rect>
+<text x="110" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.1</text>
+<rect x="120" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="130" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="140" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="150" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="160" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="170" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="180" y="130" width="20" height="20" fill="#002d00" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>1.0000</title></rect>
+<text x="190" y="144" text-anchor="middle" fill="#e8eeff" font-size="8">1.0</text>
+<rect x="200" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="210" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="220" y="130" width="20" height="20" fill="#ecf7ec" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0200</title></rect>
+<text x="230" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="240" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="250" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="260" y="130" width="20" height="20" fill="#002d00" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>1.0000</title></rect>
+<text x="270" y="144" text-anchor="middle" fill="#e8eeff" font-size="8">1.0</text>
+<rect x="280" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="290" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="300" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="310" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="320" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="330" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="340" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="350" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="360" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="370" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="380" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="390" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="400" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="410" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="420" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="430" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="440" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="450" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="460" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="470" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="480" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="490" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="500" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="510" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="520" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="530" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="540" y="130" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="550" y="144" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="144" text-anchor="end" fill="#9fb0d6">blocks.1.mlp</text>
+<rect x="80" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="90" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="100" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="110" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="120" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="130" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="140" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="150" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="160" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="170" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="180" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="190" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="200" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="210" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="220" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="230" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="240" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="250" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="260" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="270" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="280" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="290" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="300" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="310" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="320" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="330" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="340" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="350" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="360" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="370" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="380" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="390" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="400" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="410" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="420" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="430" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="440" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="450" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="460" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="470" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="480" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="490" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="500" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="510" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="520" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="530" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="540" y="150" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="550" y="164" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="164" text-anchor="end" fill="#9fb0d6">blocks.1.att</text>
+<rect x="80" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="90" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="100" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="110" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="120" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="130" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="140" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="150" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="160" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="170" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="180" y="170" width="20" height="20" fill="#ecf7ec" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0200</title></rect>
+<text x="190" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="200" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="210" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="220" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="230" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="240" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="250" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="260" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="270" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="280" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="290" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="300" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="310" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="320" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="330" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="340" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="350" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="360" y="170" width="20" height="20" fill="#002d00" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>1.0000</title></rect>
+<text x="370" y="184" text-anchor="middle" fill="#e8eeff" font-size="8">1.0</text>
+<rect x="380" y="170" width="20" height="20" fill="#ecf7ec" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0200</title></rect>
+<text x="390" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="400" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="410" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="420" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="430" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="440" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="450" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="460" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="470" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="480" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="490" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="500" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="510" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="520" y="170" width="20" height="20" fill="#ecf7ec" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0200</title></rect>
+<text x="530" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="540" y="170" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="550" y="184" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="184" text-anchor="end" fill="#9fb0d6">blocks.2.mlp</text>
+<rect x="80" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="90" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="100" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="110" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="120" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="130" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="140" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="150" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="160" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="170" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="180" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="190" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="200" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="210" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="220" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="230" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="240" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="250" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="260" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="270" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="280" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="290" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="300" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="310" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="320" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="330" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="340" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="350" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="360" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="370" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="380" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="390" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="400" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="410" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="420" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="430" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="440" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="450" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="460" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="470" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="480" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="490" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="500" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="510" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="520" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="530" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="540" y="190" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="550" y="204" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="204" text-anchor="end" fill="#9fb0d6">blocks.2.att</text>
+<rect x="80" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="90" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="100" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="110" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="120" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="130" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="140" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="150" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="160" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="170" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="180" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="190" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="200" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="210" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="220" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="230" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="240" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="250" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="260" y="210" width="20" height="20" fill="#dff3df" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0600</title></rect>
+<text x="270" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.1</text>
+<rect x="280" y="210" width="20" height="20" fill="#d9f1d9" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0800</title></rect>
+<text x="290" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.1</text>
+<rect x="300" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="310" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="320" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="330" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="340" y="210" width="20" height="20" fill="#d9f1d9" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0800</title></rect>
+<text x="350" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.1</text>
+<rect x="360" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="370" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="380" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="390" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="400" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="410" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="420" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="430" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="440" y="210" width="20" height="20" fill="#cdedcd" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1200</title></rect>
+<text x="450" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.1</text>
+<rect x="460" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="470" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="480" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="490" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="500" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="510" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="520" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="530" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="540" y="210" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="550" y="224" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="224" text-anchor="end" fill="#9fb0d6">blocks.3.mlp</text>
+<rect x="80" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="90" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="100" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="110" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="120" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="130" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="140" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="150" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="160" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="170" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="180" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="190" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="200" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="210" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="220" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="230" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="240" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="250" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="260" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="270" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="280" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="290" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="300" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="310" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="320" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="330" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="340" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="350" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="360" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="370" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="380" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="390" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="400" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="410" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="420" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="430" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="440" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="450" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="460" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="470" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="480" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="490" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="500" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="510" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="520" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="530" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<rect x="540" y="230" width="20" height="20" fill="#f2f9f2" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0000</title></rect>
+<text x="550" y="244" text-anchor="middle" fill="#0a0f1c" font-size="8">0.0</text>
+<text x="75" y="244" text-anchor="end" fill="#9fb0d6">blocks.3.att</text>
+</svg></div>
+  </div>
+</div>
+<div class="section" id="l1-·-activation-timeline">
+  <div class="section-header">
+    <span class="sx">§02</span>
+    <span class="icon" aria-hidden="true">◭</span>
+    <h2>L1 · Activation Timeline</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    
+    <div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="700" height="220" font-family="ui-monospace, monospace" font-size="11">
+<defs><filter id="lglow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="700" height="220" fill="none" rx="4"/>
+<text x="350" y="22" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Mean |activation| per layer</text>
+<line x1="55" y1="40.0" x2="580" y2="40.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="44.0" text-anchor="end" fill="#7c89a8" font-size="9">0.52</text>
+<line x1="55" y1="75.0" x2="580" y2="75.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="79.0" text-anchor="end" fill="#7c89a8" font-size="9">0.46</text>
+<line x1="55" y1="110.0" x2="580" y2="110.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="114.0" text-anchor="end" fill="#7c89a8" font-size="9">0.40</text>
+<line x1="55" y1="145.0" x2="580" y2="145.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="149.0" text-anchor="end" fill="#7c89a8" font-size="9">0.34</text>
+<line x1="55" y1="180.0" x2="580" y2="180.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="184.0" text-anchor="end" fill="#7c89a8" font-size="9">0.29</text>
+<line x1="55" y1="40" x2="55" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<line x1="55" y1="180" x2="580" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<text x="13" y="110" text-anchor="middle" transform="rotate(-90 13 110)" fill="#8493b8" font-size="10">activation</text>
+<text x="317" y="215" text-anchor="middle" fill="#8493b8" font-size="10">step</text>
+<path d="M 55.0 105.2 L 65.7 119.0 L 76.4 124.4 L 87.1 119.0 L 97.9 102.4 L 108.6 85.0 L 119.3 116.2 L 130.0 123.0 L 140.7 120.4 L 151.4 130.8 L 162.1 105.6 L 172.9 127.6 L 183.6 60.5 L 194.3 123.1 L 205.0 111.2 L 215.7 114.6 L 226.4 99.1 L 237.1 116.5 L 247.9 119.5 L 258.6 138.6 L 269.3 104.8 L 280.0 113.3 L 290.7 82.3 L 301.4 118.8 L 312.1 65.1 L 322.9 128.6 L 333.6 90.8 L 344.3 91.2 L 355.0 104.0 L 365.7 132.3 L 376.4 103.7 L 387.1 129.4 L 397.9 109.6 L 408.6 108.8 L 419.3 138.6 L 430.0 100.7 L 440.7 114.4 L 451.4 94.0 L 462.1 116.0 L 472.9 114.9 L 483.6 127.4 L 494.3 105.6 L 505.0 116.2 L 515.7 105.4 L 526.4 114.3 L 537.1 80.5 L 547.9 69.3 L 558.6 111.9 L 569.3 134.3 L 580.0 115.4" fill="none" stroke="#38e1ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="105.2" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=0.00, y=0.4104</title></circle>
+<circle cx="65.7" cy="119.0" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=1.00, y=0.3874</title></circle>
+<circle cx="76.4" cy="124.4" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=2.00, y=0.3784</title></circle>
+<circle cx="87.1" cy="119.0" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=3.00, y=0.3875</title></circle>
+<circle cx="97.9" cy="102.4" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=4.00, y=0.4151</title></circle>
+<circle cx="108.6" cy="85.0" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=5.00, y=0.4442</title></circle>
+<circle cx="119.3" cy="116.2" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=6.00, y=0.3921</title></circle>
+<circle cx="130.0" cy="123.0" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=7.00, y=0.3808</title></circle>
+<circle cx="140.7" cy="120.4" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=8.00, y=0.3851</title></circle>
+<circle cx="151.4" cy="130.8" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=9.00, y=0.3678</title></circle>
+<circle cx="162.1" cy="105.6" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=10.00, y=0.4098</title></circle>
+<circle cx="172.9" cy="127.6" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=11.00, y=0.3730</title></circle>
+<circle cx="183.6" cy="60.5" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=12.00, y=0.4851</title></circle>
+<circle cx="194.3" cy="123.1" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=13.00, y=0.3805</title></circle>
+<circle cx="205.0" cy="111.2" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=14.00, y=0.4005</title></circle>
+<circle cx="215.7" cy="114.6" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=15.00, y=0.3948</title></circle>
+<circle cx="226.4" cy="99.1" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=16.00, y=0.4207</title></circle>
+<circle cx="237.1" cy="116.5" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=17.00, y=0.3917</title></circle>
+<circle cx="247.9" cy="119.5" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=18.00, y=0.3866</title></circle>
+<circle cx="258.6" cy="138.6" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=19.00, y=0.3548</title></circle>
+<circle cx="269.3" cy="104.8" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=20.00, y=0.4111</title></circle>
+<circle cx="280.0" cy="113.3" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=21.00, y=0.3970</title></circle>
+<circle cx="290.7" cy="82.3" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=22.00, y=0.4487</title></circle>
+<circle cx="301.4" cy="118.8" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=23.00, y=0.3878</title></circle>
+<circle cx="312.1" cy="65.1" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=24.00, y=0.4774</title></circle>
+<circle cx="322.9" cy="128.6" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=25.00, y=0.3714</title></circle>
+<circle cx="333.6" cy="90.8" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=26.00, y=0.4344</title></circle>
+<circle cx="344.3" cy="91.2" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=27.00, y=0.4339</title></circle>
+<circle cx="355.0" cy="104.0" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=28.00, y=0.4125</title></circle>
+<circle cx="365.7" cy="132.3" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=29.00, y=0.3653</title></circle>
+<circle cx="376.4" cy="103.7" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=30.00, y=0.4130</title></circle>
+<circle cx="387.1" cy="129.4" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=31.00, y=0.3701</title></circle>
+<circle cx="397.9" cy="109.6" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=32.00, y=0.4032</title></circle>
+<circle cx="408.6" cy="108.8" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=33.00, y=0.4044</title></circle>
+<circle cx="419.3" cy="138.6" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=34.00, y=0.3547</title></circle>
+<circle cx="430.0" cy="100.7" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=35.00, y=0.4180</title></circle>
+<circle cx="440.7" cy="114.4" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=36.00, y=0.3950</title></circle>
+<circle cx="451.4" cy="94.0" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=37.00, y=0.4291</title></circle>
+<circle cx="462.1" cy="116.0" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=38.00, y=0.3924</title></circle>
+<circle cx="472.9" cy="114.9" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=39.00, y=0.3943</title></circle>
+<circle cx="483.6" cy="127.4" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=40.00, y=0.3735</title></circle>
+<circle cx="494.3" cy="105.6" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=41.00, y=0.4098</title></circle>
+<circle cx="505.0" cy="116.2" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=42.00, y=0.3921</title></circle>
+<circle cx="515.7" cy="105.4" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=43.00, y=0.4101</title></circle>
+<circle cx="526.4" cy="114.3" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=44.00, y=0.3953</title></circle>
+<circle cx="537.1" cy="80.5" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=45.00, y=0.4516</title></circle>
+<circle cx="547.9" cy="69.3" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=46.00, y=0.4704</title></circle>
+<circle cx="558.6" cy="111.9" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=47.00, y=0.3992</title></circle>
+<circle cx="569.3" cy="134.3" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=48.00, y=0.3619</title></circle>
+<circle cx="580.0" cy="115.4" r="3" fill="#38e1ff" opacity="0.7"><title>blocks.0.mlp: x=49.00, y=0.3935</title></circle>
+<line x1="590" y1="46" x2="608" y2="46" stroke="#38e1ff" stroke-width="2"/>
+<text x="612" y="50" fill="#aeb9d6" font-size="9">blocks.0.mlp</text>
+<path d="M 55.0 120.3 L 65.7 89.6 L 76.4 107.6 L 87.1 108.8 L 97.9 115.2 L 108.6 111.9 L 119.3 127.2 L 130.0 129.5 L 140.7 120.7 L 151.4 128.7 L 162.1 119.2 L 172.9 135.2 L 183.6 92.9 L 194.3 104.5 L 205.0 138.7 L 215.7 88.5 L 226.4 122.2 L 237.1 129.9 L 247.9 117.2 L 258.6 114.5 L 269.3 103.2 L 280.0 88.7 L 290.7 71.3 L 301.4 99.0 L 312.1 124.7 L 322.9 103.4 L 333.6 106.5 L 344.3 137.7 L 355.0 102.5 L 365.7 133.7 L 376.4 82.3 L 387.1 117.5 L 397.9 105.3 L 408.6 76.6 L 419.3 121.4 L 430.0 102.3 L 440.7 113.8 L 451.4 125.2 L 462.1 113.6 L 472.9 123.7 L 483.6 125.1 L 494.3 83.6 L 505.0 103.6 L 515.7 104.8 L 526.4 117.6 L 537.1 105.8 L 547.9 91.8 L 558.6 136.0 L 569.3 145.6 L 580.0 109.8" fill="none" stroke="#ffb74a" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="120.3" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=0.00, y=0.3853</title></circle>
+<circle cx="65.7" cy="89.6" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=1.00, y=0.4366</title></circle>
+<circle cx="76.4" cy="107.6" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=2.00, y=0.4065</title></circle>
+<circle cx="87.1" cy="108.8" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=3.00, y=0.4045</title></circle>
+<circle cx="97.9" cy="115.2" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=4.00, y=0.3938</title></circle>
+<circle cx="108.6" cy="111.9" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=5.00, y=0.3994</title></circle>
+<circle cx="119.3" cy="127.2" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=6.00, y=0.3738</title></circle>
+<circle cx="130.0" cy="129.5" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=7.00, y=0.3698</title></circle>
+<circle cx="140.7" cy="120.7" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=8.00, y=0.3846</title></circle>
+<circle cx="151.4" cy="128.7" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=9.00, y=0.3712</title></circle>
+<circle cx="162.1" cy="119.2" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=10.00, y=0.3871</title></circle>
+<circle cx="172.9" cy="135.2" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=11.00, y=0.3605</title></circle>
+<circle cx="183.6" cy="92.9" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=12.00, y=0.4310</title></circle>
+<circle cx="194.3" cy="104.5" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=13.00, y=0.4116</title></circle>
+<circle cx="205.0" cy="138.7" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=14.00, y=0.3545</title></circle>
+<circle cx="215.7" cy="88.5" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=15.00, y=0.4383</title></circle>
+<circle cx="226.4" cy="122.2" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=16.00, y=0.3822</title></circle>
+<circle cx="237.1" cy="129.9" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=17.00, y=0.3692</title></circle>
+<circle cx="247.9" cy="117.2" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=18.00, y=0.3904</title></circle>
+<circle cx="258.6" cy="114.5" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=19.00, y=0.3949</title></circle>
+<circle cx="269.3" cy="103.2" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=20.00, y=0.4137</title></circle>
+<circle cx="280.0" cy="88.7" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=21.00, y=0.4380</title></circle>
+<circle cx="290.7" cy="71.3" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=22.00, y=0.4670</title></circle>
+<circle cx="301.4" cy="99.0" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=23.00, y=0.4207</title></circle>
+<circle cx="312.1" cy="124.7" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=24.00, y=0.3780</title></circle>
+<circle cx="322.9" cy="103.4" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=25.00, y=0.4134</title></circle>
+<circle cx="333.6" cy="106.5" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=26.00, y=0.4082</title></circle>
+<circle cx="344.3" cy="137.7" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=27.00, y=0.3563</title></circle>
+<circle cx="355.0" cy="102.5" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=28.00, y=0.4150</title></circle>
+<circle cx="365.7" cy="133.7" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=29.00, y=0.3629</title></circle>
+<circle cx="376.4" cy="82.3" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=30.00, y=0.4487</title></circle>
+<circle cx="387.1" cy="117.5" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=31.00, y=0.3900</title></circle>
+<circle cx="397.9" cy="105.3" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=32.00, y=0.4104</title></circle>
+<circle cx="408.6" cy="76.6" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=33.00, y=0.4582</title></circle>
+<circle cx="419.3" cy="121.4" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=34.00, y=0.3834</title></circle>
+<circle cx="430.0" cy="102.3" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=35.00, y=0.4153</title></circle>
+<circle cx="440.7" cy="113.8" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=36.00, y=0.3961</title></circle>
+<circle cx="451.4" cy="125.2" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=37.00, y=0.3771</title></circle>
+<circle cx="462.1" cy="113.6" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=38.00, y=0.3965</title></circle>
+<circle cx="472.9" cy="123.7" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=39.00, y=0.3796</title></circle>
+<circle cx="483.6" cy="125.1" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=40.00, y=0.3772</title></circle>
+<circle cx="494.3" cy="83.6" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=41.00, y=0.4465</title></circle>
+<circle cx="505.0" cy="103.6" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=42.00, y=0.4132</title></circle>
+<circle cx="515.7" cy="104.8" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=43.00, y=0.4112</title></circle>
+<circle cx="526.4" cy="117.6" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=44.00, y=0.3898</title></circle>
+<circle cx="537.1" cy="105.8" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=45.00, y=0.4095</title></circle>
+<circle cx="547.9" cy="91.8" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=46.00, y=0.4328</title></circle>
+<circle cx="558.6" cy="136.0" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=47.00, y=0.3591</title></circle>
+<circle cx="569.3" cy="145.6" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=48.00, y=0.3430</title></circle>
+<circle cx="580.0" cy="109.8" r="3" fill="#ffb74a" opacity="0.7"><title>blocks.1.mlp: x=49.00, y=0.4028</title></circle>
+<line x1="590" y1="64" x2="608" y2="64" stroke="#ffb74a" stroke-width="2"/>
+<text x="612" y="68" fill="#aeb9d6" font-size="9">blocks.1.mlp</text>
+<path d="M 55.0 43.5 L 65.7 122.6 L 76.4 136.0 L 87.1 89.6 L 97.9 103.3 L 108.6 128.9 L 119.3 74.2 L 130.0 53.4 L 140.7 128.5 L 151.4 67.6 L 162.1 50.0 L 172.9 101.9 L 183.6 137.8 L 194.3 123.6 L 205.0 109.6 L 215.7 92.0 L 226.4 40.0 L 237.1 112.4 L 247.9 62.4 L 258.6 138.9 L 269.3 77.4 L 280.0 129.0 L 290.7 126.6 L 301.4 103.9 L 312.1 106.3 L 322.9 76.8 L 333.6 64.6 L 344.3 107.2 L 355.0 143.3 L 365.7 136.7 L 376.4 133.5 L 387.1 54.6 L 397.9 88.1 L 408.6 127.3 L 419.3 180.0 L 430.0 64.0 L 440.7 125.9 L 451.4 80.5 L 462.1 155.7 L 472.9 172.9 L 483.6 116.4 L 494.3 137.2 L 505.0 87.7 L 515.7 91.1 L 526.4 84.1 L 537.1 141.3 L 547.9 160.3 L 558.6 60.6 L 569.3 154.4 L 580.0 128.4" fill="none" stroke="#3df5a6" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="43.5" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=0.00, y=0.5135</title></circle>
+<circle cx="65.7" cy="122.6" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=1.00, y=0.3815</title></circle>
+<circle cx="76.4" cy="136.0" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=2.00, y=0.3591</title></circle>
+<circle cx="87.1" cy="89.6" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=3.00, y=0.4365</title></circle>
+<circle cx="97.9" cy="103.3" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=4.00, y=0.4137</title></circle>
+<circle cx="108.6" cy="128.9" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=5.00, y=0.3710</title></circle>
+<circle cx="119.3" cy="74.2" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=6.00, y=0.4621</title></circle>
+<circle cx="130.0" cy="53.4" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=7.00, y=0.4969</title></circle>
+<circle cx="140.7" cy="128.5" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=8.00, y=0.3716</title></circle>
+<circle cx="151.4" cy="67.6" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=9.00, y=0.4731</title></circle>
+<circle cx="162.1" cy="50.0" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=10.00, y=0.5025</title></circle>
+<circle cx="172.9" cy="101.9" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=11.00, y=0.4160</title></circle>
+<circle cx="183.6" cy="137.8" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=12.00, y=0.3562</title></circle>
+<circle cx="194.3" cy="123.6" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=13.00, y=0.3798</title></circle>
+<circle cx="205.0" cy="109.6" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=14.00, y=0.4032</title></circle>
+<circle cx="215.7" cy="92.0" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=15.00, y=0.4324</title></circle>
+<circle cx="226.4" cy="40.0" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=16.00, y=0.5192</title></circle>
+<circle cx="237.1" cy="112.4" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=17.00, y=0.3985</title></circle>
+<circle cx="247.9" cy="62.4" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=18.00, y=0.4818</title></circle>
+<circle cx="258.6" cy="138.9" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=19.00, y=0.3542</title></circle>
+<circle cx="269.3" cy="77.4" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=20.00, y=0.4568</title></circle>
+<circle cx="280.0" cy="129.0" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=21.00, y=0.3707</title></circle>
+<circle cx="290.7" cy="126.6" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=22.00, y=0.3748</title></circle>
+<circle cx="301.4" cy="103.9" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=23.00, y=0.4126</title></circle>
+<circle cx="312.1" cy="106.3" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=24.00, y=0.4086</title></circle>
+<circle cx="322.9" cy="76.8" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=25.00, y=0.4578</title></circle>
+<circle cx="333.6" cy="64.6" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=26.00, y=0.4781</title></circle>
+<circle cx="344.3" cy="107.2" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=27.00, y=0.4072</title></circle>
+<circle cx="355.0" cy="143.3" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=28.00, y=0.3470</title></circle>
+<circle cx="365.7" cy="136.7" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=29.00, y=0.3580</title></circle>
+<circle cx="376.4" cy="133.5" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=30.00, y=0.3632</title></circle>
+<circle cx="387.1" cy="54.6" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=31.00, y=0.4949</title></circle>
+<circle cx="397.9" cy="88.1" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=32.00, y=0.4389</title></circle>
+<circle cx="408.6" cy="127.3" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=33.00, y=0.3736</title></circle>
+<circle cx="419.3" cy="180.0" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=34.00, y=0.2857</title></circle>
+<circle cx="430.0" cy="64.0" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=35.00, y=0.4792</title></circle>
+<circle cx="440.7" cy="125.9" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=36.00, y=0.3760</title></circle>
+<circle cx="451.4" cy="80.5" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=37.00, y=0.4517</title></circle>
+<circle cx="462.1" cy="155.7" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=38.00, y=0.3262</title></circle>
+<circle cx="472.9" cy="172.9" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=39.00, y=0.2976</title></circle>
+<circle cx="483.6" cy="116.4" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=40.00, y=0.3918</title></circle>
+<circle cx="494.3" cy="137.2" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=41.00, y=0.3571</title></circle>
+<circle cx="505.0" cy="87.7" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=42.00, y=0.4396</title></circle>
+<circle cx="515.7" cy="91.1" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=43.00, y=0.4340</title></circle>
+<circle cx="526.4" cy="84.1" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=44.00, y=0.4456</title></circle>
+<circle cx="537.1" cy="141.3" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=45.00, y=0.3502</title></circle>
+<circle cx="547.9" cy="160.3" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=46.00, y=0.3185</title></circle>
+<circle cx="558.6" cy="60.6" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=47.00, y=0.4848</title></circle>
+<circle cx="569.3" cy="154.4" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=48.00, y=0.3284</title></circle>
+<circle cx="580.0" cy="128.4" r="3" fill="#3df5a6" opacity="0.7"><title>blocks.2.mlp: x=49.00, y=0.3717</title></circle>
+<line x1="590" y1="82" x2="608" y2="82" stroke="#3df5a6" stroke-width="2"/>
+<text x="612" y="86" fill="#aeb9d6" font-size="9">blocks.2.mlp</text>
+<path d="M 55.0 117.2 L 65.7 99.9 L 76.4 107.7 L 87.1 122.2 L 97.9 117.7 L 108.6 129.9 L 119.3 104.9 L 130.0 125.9 L 140.7 104.0 L 151.4 114.5 L 162.1 134.8 L 172.9 136.0 L 183.6 116.0 L 194.3 130.8 L 205.0 98.7 L 215.7 90.0 L 226.4 107.9 L 237.1 110.8 L 247.9 117.7 L 258.6 127.2 L 269.3 120.1 L 280.0 126.0 L 290.7 120.7 L 301.4 101.2 L 312.1 149.8 L 322.9 136.0 L 333.6 115.4 L 344.3 126.0 L 355.0 108.1 L 365.7 98.5 L 376.4 125.2 L 387.1 119.8 L 397.9 120.4 L 408.6 127.6 L 419.3 133.0 L 430.0 109.7 L 440.7 123.7 L 451.4 126.2 L 462.1 130.6 L 472.9 118.7 L 483.6 113.8 L 494.3 131.8 L 505.0 122.1 L 515.7 84.7 L 526.4 102.8 L 537.1 129.9 L 547.9 116.8 L 558.6 114.1 L 569.3 135.3 L 580.0 95.5" fill="none" stroke="#ff5d72" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="117.2" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=0.00, y=0.3905</title></circle>
+<circle cx="65.7" cy="99.9" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=1.00, y=0.4193</title></circle>
+<circle cx="76.4" cy="107.7" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=2.00, y=0.4063</title></circle>
+<circle cx="87.1" cy="122.2" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=3.00, y=0.3820</title></circle>
+<circle cx="97.9" cy="117.7" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=4.00, y=0.3896</title></circle>
+<circle cx="108.6" cy="129.9" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=5.00, y=0.3692</title></circle>
+<circle cx="119.3" cy="104.9" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=6.00, y=0.4110</title></circle>
+<circle cx="130.0" cy="125.9" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=7.00, y=0.3759</title></circle>
+<circle cx="140.7" cy="104.0" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=8.00, y=0.4124</title></circle>
+<circle cx="151.4" cy="114.5" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=9.00, y=0.3950</title></circle>
+<circle cx="162.1" cy="134.8" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=10.00, y=0.3610</title></circle>
+<circle cx="172.9" cy="136.0" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=11.00, y=0.3591</title></circle>
+<circle cx="183.6" cy="116.0" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=12.00, y=0.3924</title></circle>
+<circle cx="194.3" cy="130.8" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=13.00, y=0.3678</title></circle>
+<circle cx="205.0" cy="98.7" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=14.00, y=0.4214</title></circle>
+<circle cx="215.7" cy="90.0" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=15.00, y=0.4358</title></circle>
+<circle cx="226.4" cy="107.9" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=16.00, y=0.4059</title></circle>
+<circle cx="237.1" cy="110.8" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=17.00, y=0.4012</title></circle>
+<circle cx="247.9" cy="117.7" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=18.00, y=0.3895</title></circle>
+<circle cx="258.6" cy="127.2" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=19.00, y=0.3737</title></circle>
+<circle cx="269.3" cy="120.1" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=20.00, y=0.3855</title></circle>
+<circle cx="280.0" cy="126.0" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=21.00, y=0.3758</title></circle>
+<circle cx="290.7" cy="120.7" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=22.00, y=0.3846</title></circle>
+<circle cx="301.4" cy="101.2" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=23.00, y=0.4171</title></circle>
+<circle cx="312.1" cy="149.8" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=24.00, y=0.3360</title></circle>
+<circle cx="322.9" cy="136.0" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=25.00, y=0.3590</title></circle>
+<circle cx="333.6" cy="115.4" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=26.00, y=0.3934</title></circle>
+<circle cx="344.3" cy="126.0" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=27.00, y=0.3757</title></circle>
+<circle cx="355.0" cy="108.1" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=28.00, y=0.4056</title></circle>
+<circle cx="365.7" cy="98.5" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=29.00, y=0.4216</title></circle>
+<circle cx="376.4" cy="125.2" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=30.00, y=0.3772</title></circle>
+<circle cx="387.1" cy="119.8" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=31.00, y=0.3862</title></circle>
+<circle cx="397.9" cy="120.4" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=32.00, y=0.3851</title></circle>
+<circle cx="408.6" cy="127.6" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=33.00, y=0.3730</title></circle>
+<circle cx="419.3" cy="133.0" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=34.00, y=0.3640</title></circle>
+<circle cx="430.0" cy="109.7" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=35.00, y=0.4029</title></circle>
+<circle cx="440.7" cy="123.7" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=36.00, y=0.3796</title></circle>
+<circle cx="451.4" cy="126.2" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=37.00, y=0.3754</title></circle>
+<circle cx="462.1" cy="130.6" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=38.00, y=0.3680</title></circle>
+<circle cx="472.9" cy="118.7" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=39.00, y=0.3880</title></circle>
+<circle cx="483.6" cy="113.8" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=40.00, y=0.3962</title></circle>
+<circle cx="494.3" cy="131.8" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=41.00, y=0.3661</title></circle>
+<circle cx="505.0" cy="122.1" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=42.00, y=0.3822</title></circle>
+<circle cx="515.7" cy="84.7" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=43.00, y=0.4446</title></circle>
+<circle cx="526.4" cy="102.8" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=44.00, y=0.4144</title></circle>
+<circle cx="537.1" cy="129.9" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=45.00, y=0.3692</title></circle>
+<circle cx="547.9" cy="116.8" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=46.00, y=0.3910</title></circle>
+<circle cx="558.6" cy="114.1" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=47.00, y=0.3957</title></circle>
+<circle cx="569.3" cy="135.3" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=48.00, y=0.3603</title></circle>
+<circle cx="580.0" cy="95.5" r="3" fill="#ff5d72" opacity="0.7"><title>blocks.3.mlp: x=49.00, y=0.4266</title></circle>
+<line x1="590" y1="100" x2="608" y2="100" stroke="#ff5d72" stroke-width="2"/>
+<text x="612" y="104" fill="#aeb9d6" font-size="9">blocks.3.mlp</text>
+</svg></div>
+  </div>
+</div>
+<div class="section" id="l1-·-logit-lens-(real)">
+  <div class="section-header">
+    <span class="sx">§03</span>
+    <span class="icon" aria-hidden="true">◎</span>
+    <h2>L1 · Logit Lens (real)</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">Confidenza della predizione proiettata a ogni layer reale.</div>
+    <div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="700" height="220" font-family="ui-monospace, monospace" font-size="11">
+<defs><filter id="lglow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="700" height="220" fill="none" rx="4"/>
+<text x="350" y="22" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Confidence Through Layers</text>
+<line x1="55" y1="40.0" x2="580" y2="40.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="44.0" text-anchor="end" fill="#7c89a8" font-size="9">0.04</text>
+<line x1="55" y1="75.0" x2="580" y2="75.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="79.0" text-anchor="end" fill="#7c89a8" font-size="9">0.03</text>
+<line x1="55" y1="110.0" x2="580" y2="110.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="114.0" text-anchor="end" fill="#7c89a8" font-size="9">0.03</text>
+<line x1="55" y1="145.0" x2="580" y2="145.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="149.0" text-anchor="end" fill="#7c89a8" font-size="9">0.03</text>
+<line x1="55" y1="180.0" x2="580" y2="180.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="184.0" text-anchor="end" fill="#7c89a8" font-size="9">0.03</text>
+<line x1="55" y1="40" x2="55" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<line x1="55" y1="180" x2="580" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<text x="13" y="110" text-anchor="middle" transform="rotate(-90 13 110)" fill="#8493b8" font-size="10">confidence</text>
+<text x="317" y="215" text-anchor="middle" fill="#8493b8" font-size="10">layer index</text>
+<path d="M 55.0 40.0 L 230.0 148.1 L 405.0 55.6 L 580.0 180.0" fill="none" stroke="#38e1ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="40.0" r="3" fill="#38e1ff" opacity="0.7"><title>pos=0: x=0.00, y=0.0366</title></circle>
+<circle cx="230.0" cy="148.1" r="3" fill="#38e1ff" opacity="0.7"><title>pos=0: x=1.00, y=0.0279</title></circle>
+<circle cx="405.0" cy="55.6" r="3" fill="#38e1ff" opacity="0.7"><title>pos=0: x=2.00, y=0.0354</title></circle>
+<circle cx="580.0" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>pos=0: x=3.00, y=0.0253</title></circle>
+<line x1="590" y1="46" x2="608" y2="46" stroke="#38e1ff" stroke-width="2"/>
+<text x="612" y="50" fill="#aeb9d6" font-size="9">pos=0</text>
+</svg></div>
+  </div>
+</div>
+<div class="section" id="l5-·-ablation-sweep">
+  <div class="section-header">
+    <span class="sx">§04</span>
+    <span class="icon" aria-hidden="true">▽</span>
+    <h2>L5 · Ablation Sweep</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">Cosa sottratta. Blu = il componente sosteneva il token; rosso = lo deprimeva.</div>
+    <div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="160" height="230" font-family="ui-monospace, monospace" font-size="10">
+<text x="80" y="25" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Effect on logit[296]</text>
+<text x="95" y="85" text-anchor="middle" transform="rotate(-45 95 85)" fill="#8493b8">attn</text>
+<text x="125" y="85" text-anchor="middle" transform="rotate(-45 125 85)" fill="#8493b8">mlp</text>
+<rect x="80" y="90" width="30" height="30" fill="#6aa8e5" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-1.3150</title></rect>
+<text x="95" y="109" text-anchor="middle" fill="#0a0f1c" font-size="8">-1.31</text>
+<rect x="110" y="90" width="30" height="30" fill="#05338c" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-2.7102</title></rect>
+<text x="125" y="109" text-anchor="middle" fill="#e8eeff" font-size="8">-2.71</text>
+<text x="75" y="109" text-anchor="end" fill="#9fb0d6">blocks.0</text>
+<rect x="80" y="120" width="30" height="30" fill="#d0dfef" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-0.3261</title></rect>
+<text x="95" y="139" text-anchor="middle" fill="#0a0f1c" font-size="8">-0.33</text>
+<rect x="110" y="120" width="30" height="30" fill="#89b8e8" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-1.0152</title></rect>
+<text x="125" y="139" text-anchor="middle" fill="#0a0f1c" font-size="8">-1.02</text>
+<text x="75" y="139" text-anchor="end" fill="#9fb0d6">blocks.1</text>
+<rect x="80" y="150" width="30" height="30" fill="#9ec4ea" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-0.8129</title></rect>
+<text x="95" y="169" text-anchor="middle" fill="#0a0f1c" font-size="8">-0.81</text>
+<rect x="110" y="150" width="30" height="30" fill="#83b5e8" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-1.0674</title></rect>
+<text x="125" y="169" text-anchor="middle" fill="#0a0f1c" font-size="8">-1.07</text>
+<text x="75" y="169" text-anchor="end" fill="#9fb0d6">blocks.2</text>
+<rect x="80" y="180" width="30" height="30" fill="#f2dfd6" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.2478</title></rect>
+<text x="95" y="199" text-anchor="middle" fill="#0a0f1c" font-size="8">0.25</text>
+<rect x="110" y="180" width="30" height="30" fill="#f2e8e3" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.1335</title></rect>
+<text x="125" y="199" text-anchor="middle" fill="#0a0f1c" font-size="8">0.13</text>
+<text x="75" y="199" text-anchor="end" fill="#9fb0d6">blocks.3</text>
+</svg></div>
+  </div>
+</div>
+<div class="section" id="l5-·-steering-sweep">
+  <div class="section-header">
+    <span class="sx">§05</span>
+    <span class="icon" aria-hidden="true">◈</span>
+    <h2>L5 · Steering Sweep</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">Direzione aggiunta. Inietta W_U[target] nel residual stream e osserva come risponde il logit del target.</div>
+    <div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="700" height="220" font-family="ui-monospace, monospace" font-size="11">
+<defs><filter id="lglow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="700" height="220" fill="none" rx="4"/>
+<text x="350" y="22" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Target logit vs coefficiente</text>
+<line x1="55" y1="40.0" x2="580" y2="40.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="44.0" text-anchor="end" fill="#7c89a8" font-size="9">4.21</text>
+<line x1="55" y1="75.0" x2="580" y2="75.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="79.0" text-anchor="end" fill="#7c89a8" font-size="9">3.50</text>
+<line x1="55" y1="110.0" x2="580" y2="110.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="114.0" text-anchor="end" fill="#7c89a8" font-size="9">2.79</text>
+<line x1="55" y1="145.0" x2="580" y2="145.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="149.0" text-anchor="end" fill="#7c89a8" font-size="9">2.08</text>
+<line x1="55" y1="180.0" x2="580" y2="180.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="184.0" text-anchor="end" fill="#7c89a8" font-size="9">1.37</text>
+<line x1="55" y1="40" x2="55" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<line x1="55" y1="180" x2="580" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<text x="13" y="110" text-anchor="middle" transform="rotate(-90 13 110)" fill="#8493b8" font-size="10">target logit</text>
+<text x="317" y="215" text-anchor="middle" fill="#8493b8" font-size="10">coefficient</text>
+<path d="M 55.0 180.0 L 186.2 135.0 L 251.9 114.9 L 317.5 96.6 L 383.1 80.0 L 448.7 65.1 L 580.0 40.0" fill="none" stroke="#38e1ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>resid_post[3] += W_U[296]: x=-4.00, y=1.3658</title></circle>
+<circle cx="186.2" cy="135.0" r="3" fill="#38e1ff" opacity="0.7"><title>resid_post[3] += W_U[296]: x=-2.00, y=2.2785</title></circle>
+<circle cx="251.9" cy="114.9" r="3" fill="#38e1ff" opacity="0.7"><title>resid_post[3] += W_U[296]: x=-1.00, y=2.6862</title></circle>
+<circle cx="317.5" cy="96.6" r="3" fill="#38e1ff" opacity="0.7"><title>resid_post[3] += W_U[296]: x=0.00, y=3.0582</title></circle>
+<circle cx="383.1" cy="80.0" r="3" fill="#38e1ff" opacity="0.7"><title>resid_post[3] += W_U[296]: x=1.00, y=3.3947</title></circle>
+<circle cx="448.7" cy="65.1" r="3" fill="#38e1ff" opacity="0.7"><title>resid_post[3] += W_U[296]: x=2.00, y=3.6967</title></circle>
+<circle cx="580.0" cy="40.0" r="3" fill="#38e1ff" opacity="0.7"><title>resid_post[3] += W_U[296]: x=4.00, y=4.2063</title></circle>
+<line x1="590" y1="46" x2="608" y2="46" stroke="#38e1ff" stroke-width="2"/>
+<text x="612" y="50" fill="#aeb9d6" font-size="9">resid_post[3] …</text>
+</svg></div>
+  </div>
+</div>
+<div class="section" id="l4-·-absence-—-dead-vs-suppresse">
+  <div class="section-header">
+    <span class="sx">§06</span>
+    <span class="icon" aria-hidden="true">◌</span>
+    <h2>L4 · Absence — dead vs suppressed</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">DEAD = niente lo guida (pre≈0). SUPPRESSED = qualcosa lo schiaccia (pre forte e negativo, gated dalla GELU).</div>
+    <table><thead><tr><th>Neuron</th><th>Kind</th><th>Mean pre</th><th>|pre|</th><th>Fired %</th></tr></thead><tbody><tr><td>blocks.1.mlp.5</td><td>dead</td><td>+0.00</td><td>0.00</td><td>0.0</td></tr><tr><td>blocks.2.mlp.30</td><td>dead</td><td>+0.00</td><td>0.00</td><td>0.0</td></tr><tr><td>blocks.1.mlp.9</td><td>SUPPRESSED</td><td>-30.00</td><td>30.00</td><td>0.0</td></tr><tr><td>blocks.2.mlp.14</td><td>SUPPRESSED</td><td>-30.00</td><td>30.00</td><td>0.0</td></tr></tbody></table>
+  </div>
+</div>
+<div class="section" id="l4-·-crushed-predictions-(quasi-">
+  <div class="section-header">
+    <span class="sx">§07</span>
+    <span class="icon" aria-hidden="true">◑</span>
+    <h2>L4 · Crushed predictions (quasi-detti)</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">Token che il logit lens vede salire e poi schiacciare prima dell'output: ciò che il modello stava per dire.</div>
+    <table><thead><tr><th>Token id</th><th>Peak layer</th><th>Peak prob</th><th>Final prob</th><th>Crush</th></tr></thead><tbody><tr><td>214</td><td>1</td><td>0.052</td><td>0.010</td><td>0.042</td></tr><tr><td>331</td><td>1</td><td>0.050</td><td>0.013</td><td>0.038</td></tr><tr><td>87</td><td>0</td><td>0.037</td><td>0.001</td><td>0.035</td></tr><tr><td>191</td><td>2</td><td>0.039</td><td>0.004</td><td>0.034</td></tr><tr><td>338</td><td>1</td><td>0.040</td><td>0.006</td><td>0.034</td></tr><tr><td>358</td><td>0</td><td>0.028</td><td>0.000</td><td>0.027</td></tr><tr><td>307</td><td>0</td><td>0.028</td><td>0.002</td><td>0.026</td></tr><tr><td>142</td><td>0</td><td>0.029</td><td>0.003</td><td>0.026</td></tr><tr><td>91</td><td>0</td><td>0.030</td><td>0.004</td><td>0.025</td></tr><tr><td>136</td><td>0</td><td>0.030</td><td>0.005</td><td>0.025</td></tr><tr><td>314</td><td>2</td><td>0.053</td><td>0.029</td><td>0.025</td></tr><tr><td>199</td><td>0</td><td>0.026</td><td>0.002</td><td>0.025</td></tr><tr><td>463</td><td>0</td><td>0.026</td><td>0.003</td><td>0.023</td></tr><tr><td>264</td><td>0</td><td>0.034</td><td>0.012</td><td>0.022</td></tr><tr><td>94</td><td>0</td><td>0.027</td><td>0.005</td><td>0.022</td></tr></tbody></table>
+  </div>
+</div>
+<div class="section" id="l5-·-head-ablation-(ranked)">
+  <div class="section-header">
+    <span class="sx">§08</span>
+    <span class="icon" aria-hidden="true">◉</span>
+    <h2>L5 · Head ablation (ranked)</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    
+    <table><thead><tr><th>Head</th><th>Effect</th></tr></thead><tbody><tr><td>blocks.0.head.4</td><td>-0.820</td></tr><tr><td>blocks.0.head.1</td><td>-0.379</td></tr><tr><td>blocks.1.head.2</td><td>-0.230</td></tr><tr><td>blocks.1.head.4</td><td>-0.223</td></tr><tr><td>blocks.3.head.1</td><td>+0.218</td></tr><tr><td>blocks.3.head.0</td><td>-0.204</td></tr><tr><td>blocks.2.head.1</td><td>-0.195</td></tr><tr><td>blocks.1.head.1</td><td>+0.165</td></tr><tr><td>blocks.2.head.2</td><td>-0.149</td></tr><tr><td>blocks.2.head.5</td><td>-0.145</td></tr><tr><td>blocks.0.head.0</td><td>-0.142</td></tr><tr><td>blocks.0.head.2</td><td>-0.131</td></tr></tbody></table>
+  </div>
+</div>
+<div class="section" id="attention-head-analysis">
+  <div class="section-header">
+    <span class="sx">§09</span>
+    <span class="icon" aria-hidden="true">◉</span>
+    <h2>Attention Head Analysis</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    
+    <table><thead><tr><th>Layer</th><th>Head</th><th>Max weight</th><th>Entropy</th><th>Ghost score</th><th>Status</th><th>Obs</th></tr></thead><tbody><tr><td>blocks.0</td><td>0</td><td>1.0000</td><td>1.747</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.0</td><td>1</td><td>1.0000</td><td>1.823</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.0</td><td>2</td><td>1.0000</td><td>1.789</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.0</td><td>3</td><td>1.0000</td><td>1.774</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.0</td><td>4</td><td>1.0000</td><td>1.803</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.0</td><td>5</td><td>1.0000</td><td>1.824</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.1</td><td>0</td><td>1.0000</td><td>1.916</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.1</td><td>1</td><td>1.0000</td><td>1.946</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.1</td><td>2</td><td>1.0000</td><td>1.966</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.1</td><td>3</td><td>1.0000</td><td>1.928</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.1</td><td>4</td><td>1.0000</td><td>1.926</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.1</td><td>5</td><td>1.0000</td><td>1.868</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.2</td><td>0</td><td>1.0000</td><td>1.968</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.2</td><td>1</td><td>1.0000</td><td>1.964</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.2</td><td>2</td><td>1.0000</td><td>1.919</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.2</td><td>3</td><td>1.0000</td><td>1.964</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.2</td><td>4</td><td>1.0000</td><td>2.016</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.2</td><td>5</td><td>1.0000</td><td>1.975</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.3</td><td>0</td><td>1.0000</td><td>1.987</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.3</td><td>1</td><td>1.0000</td><td>2.031</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.3</td><td>2</td><td>1.0000</td><td>1.997</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.3</td><td>3</td><td>1.0000</td><td>2.006</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.3</td><td>4</td><td>1.0000</td><td>1.992</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr><tr><td>blocks.3</td><td>5</td><td>1.0000</td><td>2.001</td><td>0.00</td><td><span class="badge badge-active">active</span></td><td>50</td></tr></tbody></table>
+  </div>
+</div>
+  <div class="foot">
+    <span>ONEPAI <span class="ok">●</span> introspection engine</span>
+    <span>//</span><span>generated 2026-06-13 14:32:52</span>
+    <span>//</span><span>9 modules</span>
+  </div>
+</main>
+<script>
+(function(){
+  var c=document.getElementById('bg-canvas'); if(c){
+    var ctx=c.getContext('2d'), N=56, nodes=[], DPR=Math.min(window.devicePixelRatio||1,2);
+    function resize(){ c.width=innerWidth*DPR; c.height=innerHeight*DPR; ctx.setTransform(DPR,0,0,DPR,0,0); }
+    resize(); addEventListener('resize',resize);
+    for(var i=0;i<N;i++){ nodes.push({x:Math.random()*innerWidth,y:Math.random()*innerHeight,vx:(Math.random()-0.5)*0.28,vy:(Math.random()-0.5)*0.28}); }
+    function tick(){
+      ctx.clearRect(0,0,innerWidth,innerHeight);
+      for(var i=0;i<N;i++){ var n=nodes[i]; n.x+=n.vx; n.y+=n.vy;
+        if(n.x<0||n.x>innerWidth)n.vx*=-1; if(n.y<0||n.y>innerHeight)n.vy*=-1; }
+      for(var i=0;i<N;i++) for(var j=i+1;j<N;j++){
+        var a=nodes[i],b=nodes[j],dx=a.x-b.x,dy=a.y-b.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d<150){ ctx.strokeStyle='rgba(56,225,255,'+(0.11*(1-d/150))+')'; ctx.lineWidth=1;
+          ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); } }
+      for(var i=0;i<N;i++){ var n=nodes[i]; ctx.fillStyle='rgba(130,180,255,0.55)';
+        ctx.beginPath(); ctx.arc(n.x,n.y,1.5,0,6.2832); ctx.fill(); }
+      requestAnimationFrame(tick);
+    } tick();
+  }
+  function easeOut(t){ return 1-Math.pow(1-t,3); }
+  document.querySelectorAll('[data-count]').forEach(function(el){
+    var target=parseFloat(el.getAttribute('data-count')), dec=parseInt(el.getAttribute('data-dec')||'0',10), t0=null;
+    function step(ts){ if(!t0)t0=ts; var p=Math.min((ts-t0)/900,1);
+      el.textContent=(target*easeOut(p)).toFixed(dec); if(p<1)requestAnimationFrame(step); }
+    requestAnimationFrame(step);
+  });
+  var io=new IntersectionObserver(function(es){ es.forEach(function(e){
+    if(e.isIntersecting){ e.target.classList.add('visible'); io.unobserve(e.target); } }); },{threshold:0.06});
+  document.querySelectorAll('.section').forEach(function(s,i){ s.style.transitionDelay=((i%3)*70)+'ms'; io.observe(s); });
+  document.querySelectorAll('.section-header').forEach(function(h){
+    h.addEventListener('click',function(){ var b=h.nextElementSibling,t=h.querySelector('.toggle');
+      b.classList.toggle('collapsed'); if(t)t.textContent=b.classList.contains('collapsed')?'[+]':'[-]'; }); });
+  var secs=document.querySelectorAll('.section[id]'), navs=document.querySelectorAll('#sidebar nav a');
+  addEventListener('scroll',function(){ var y=scrollY;
+    secs.forEach(function(s){ var top=s.offsetTop-90, bot=top+s.offsetHeight;
+      if(y>=top&&y<bot) navs.forEach(function(a){ a.classList.toggle('active',a.getAttribute('href')==='#'+s.id); }); }); },{passive:true});
+  navs.forEach(function(a){ a.addEventListener('click',function(e){ var t=document.querySelector(a.getAttribute('href'));
+    if(t){ e.preventDefault(); t.scrollIntoView({behavior:'smooth',block:'start'}); } }); });
+  function clock(){ var el=document.getElementById('clock'); if(el) el.textContent=new Date().toISOString().slice(11,19)+' UTC'; }
+  clock(); setInterval(clock,1000);
+  var boot=document.getElementById('boot');
+  if(boot){ var msg=boot.getAttribute('data-msg')||'', i=0;
+    (function type(){ if(i<=msg.length){ boot.innerHTML=msg.slice(0,i)+'<span style="color:#3df5a6">_</span>'; i++; setTimeout(type,16); }
+      else boot.innerHTML=msg+' <span class="ok">[ ok ]</span>'; })(); }
+})();
+</script>
+</body>
+</html>

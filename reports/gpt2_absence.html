@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ONEPAI · GPT-2 Real Introspection</title>
+  <style>
+:root {
+  --bg-0:#04060d; --bg-1:#070b16; --panel:rgba(16,22,40,0.55);
+  --panel-solid:#0b1120; --brd:rgba(120,165,255,0.16); --brd-glow:rgba(80,200,255,0.40);
+  --cyan:#38e1ff; --violet:#a274ff; --green:#3df5a6; --amber:#ffb74a; --red:#ff5d72;
+  --ghost:#8090b0; --text:#dfe8ff; --muted:#8493b8; --mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { scroll-behavior:smooth; }
+body { font-family:var(--sans); background:var(--bg-0); color:var(--text);
+  font-size:14px; line-height:1.55; -webkit-font-smoothing:antialiased; overflow-x:hidden; }
+body::before { content:""; position:fixed; inset:0; z-index:-2;
+  background:
+    radial-gradient(1200px 700px at 78% -8%, rgba(60,120,255,0.10), transparent 60%),
+    radial-gradient(900px 600px at 8% 108%, rgba(150,90,255,0.10), transparent 55%),
+    var(--bg-0);
+  background-attachment:fixed; }
+#bg-canvas { position:fixed; inset:0; z-index:-1; opacity:0.55; }
+.scanlines { position:fixed; inset:0; z-index:1; pointer-events:none; opacity:0.35;
+  background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,0.18) 3px); }
+a { color:var(--cyan); text-decoration:none; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+
+/* status bar */
+#statusbar { position:fixed; top:0; left:0; right:0; height:36px; z-index:200;
+  display:flex; align-items:center; gap:16px; padding:0 18px;
+  background:rgba(6,10,20,0.82); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--brd); font-family:var(--mono); font-size:11px; letter-spacing:0.08em; }
+#statusbar .live-dot { width:8px; height:8px; border-radius:50%; background:var(--green);
+  box-shadow:0 0 10px var(--green); animation:pulse 1.8s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.45;transform:scale(0.7);} }
+#statusbar .sb-brand { color:var(--cyan); font-weight:500; text-shadow:0 0 14px rgba(56,225,255,0.6); }
+#statusbar .sb-sep { color:var(--muted); }
+#statusbar .sb-meta { color:var(--muted); }
+#statusbar #clock { margin-left:auto; color:var(--text); }
+
+/* sidebar */
+#sidebar { position:fixed; top:36px; left:0; bottom:0; width:240px; z-index:100; overflow-y:auto;
+  background:rgba(7,11,22,0.62); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border-right:1px solid var(--brd); padding-bottom:30px; }
+#sidebar .brand-block { padding:22px 20px 16px; border-bottom:1px solid var(--brd); }
+#sidebar .brand-glyph { font-family:var(--mono); font-size:26px; color:var(--cyan);
+  text-shadow:0 0 18px rgba(56,225,255,0.7); animation:spin 9s linear infinite; display:inline-block; }
+@keyframes spin { to { transform:rotate(360deg); } }
+#sidebar .brand-name { font-size:15px; font-weight:500; letter-spacing:0.22em; margin-top:6px; }
+#sidebar .brand-sub { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:0.18em; margin-top:3px; }
+#sidebar nav { padding:12px 0; }
+#sidebar nav a { display:flex; align-items:center; gap:11px; padding:10px 20px; color:var(--muted);
+  font-size:12.5px; border-left:2px solid transparent; transition:all .18s; position:relative; }
+#sidebar nav a .nav-ix { font-family:var(--mono); font-size:10px; color:var(--brd-glow); min-width:22px; }
+#sidebar nav a:hover { color:var(--text); background:rgba(56,225,255,0.05); }
+#sidebar nav a.active { color:var(--cyan); background:rgba(56,225,255,0.08);
+  border-left-color:var(--cyan); box-shadow:inset 0 0 22px rgba(56,225,255,0.08); }
+#sidebar nav a.active .nav-ix { color:var(--cyan); }
+
+/* main */
+#main { margin-left:240px; padding:60px 40px 80px; max-width:1180px; position:relative; z-index:2; }
+.hero { margin-bottom:30px; }
+.hero h1 { font-size:27px; font-weight:500; letter-spacing:0.01em;
+  text-shadow:0 0 26px rgba(56,225,255,0.25); }
+.hero h1 .accent { color:var(--cyan); }
+.hero .boot { font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:9px;
+  border-left:2px solid var(--cyan); padding-left:11px; min-height:17px; }
+.hero .boot .ok { color:var(--green); }
+
+/* cards */
+.cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(176px,1fr)); gap:14px; margin-bottom:30px; }
+.card { position:relative; background:var(--panel); border:1px solid var(--brd); border-radius:12px;
+  padding:18px 16px 16px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); overflow:hidden; }
+.card::before { content:""; position:absolute; top:0; left:0; right:0; height:2px;
+  background:var(--cyan); box-shadow:0 0 16px var(--cyan); opacity:0.9; }
+.card.c-danger::before { background:var(--red); box-shadow:0 0 16px var(--red); }
+.card.c-warn::before { background:var(--amber); box-shadow:0 0 16px var(--amber); }
+.card.c-ok::before { background:var(--green); box-shadow:0 0 16px var(--green); }
+.card.c-violet::before { background:var(--violet); box-shadow:0 0 16px var(--violet); }
+.card .card-value { font-family:var(--mono); font-size:30px; font-weight:500; line-height:1;
+  color:var(--text); text-shadow:0 0 18px rgba(120,180,255,0.25); }
+.card .card-label { font-size:10.5px; color:var(--muted); margin-top:9px;
+  text-transform:uppercase; letter-spacing:0.12em; }
+.card .card-corner { position:absolute; bottom:8px; right:10px; font-family:var(--mono);
+  font-size:9px; color:var(--brd-glow); opacity:0.7; }
+
+/* sections */
+.section { background:var(--panel); border:1px solid var(--brd); border-radius:14px;
+  margin-bottom:22px; overflow:hidden; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  opacity:0; transform:translateY(18px); transition:opacity .6s ease, transform .6s ease; position:relative; }
+.section.visible { opacity:1; transform:translateY(0); }
+.section::before, .section::after { content:""; position:absolute; width:14px; height:14px; pointer-events:none; opacity:0.6; }
+.section::before { top:8px; left:8px; border-top:1.5px solid var(--brd-glow); border-left:1.5px solid var(--brd-glow); }
+.section::after { bottom:8px; right:8px; border-bottom:1.5px solid var(--brd-glow); border-right:1.5px solid var(--brd-glow); }
+.section-header { padding:15px 22px; cursor:pointer; display:flex; align-items:center; gap:13px;
+  border-bottom:1px solid var(--brd); user-select:none; transition:background .18s; }
+.section-header:hover { background:rgba(56,225,255,0.04); }
+.section-header .sx { font-family:var(--mono); font-size:11px; color:var(--cyan); letter-spacing:0.1em; }
+.section-header .icon { font-size:17px; filter:drop-shadow(0 0 8px rgba(56,225,255,0.5)); }
+.section-header h2 { font-size:16px; font-weight:500; flex:1; letter-spacing:0.01em; }
+.section-header .toggle { font-family:var(--mono); font-size:11px; color:var(--muted); }
+.section-body { padding:22px; overflow-x:auto; }
+.section-body.collapsed { display:none; }
+.svg-wrap { overflow-x:auto; }
+.svg-wrap svg { max-width:100%; height:auto; display:block; }
+
+/* note */
+.note { background:rgba(56,225,255,0.06); border-left:2px solid var(--cyan); padding:10px 15px;
+  font-size:12.5px; color:var(--text); border-radius:0 7px 7px 0; margin-bottom:15px; line-height:1.6; }
+
+/* tables */
+table { width:100%; border-collapse:collapse; font-size:12.5px; font-family:var(--mono); }
+th { padding:10px 13px; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.1em;
+  color:var(--cyan); border-bottom:1px solid var(--brd-glow); background:rgba(56,225,255,0.04); }
+td { padding:9px 13px; border-bottom:1px solid rgba(120,165,255,0.07); color:var(--text); }
+tr:hover td { background:rgba(56,225,255,0.04); }
+.badge { display:inline-block; padding:2px 9px; border-radius:20px; font-size:10px; font-weight:500;
+  font-family:var(--mono); letter-spacing:0.04em; }
+.badge-ghost { background:rgba(128,144,176,0.16); color:#aab6d4; border:1px solid rgba(128,144,176,0.35); }
+.badge-shadow { background:rgba(255,183,74,0.13); color:var(--amber); border:1px solid rgba(255,183,74,0.4); }
+.badge-dead { background:rgba(255,93,114,0.13); color:var(--red); border:1px solid rgba(255,93,114,0.42); }
+.badge-active { background:rgba(61,245,166,0.12); color:var(--green); border:1px solid rgba(61,245,166,0.4); }
+
+/* footer */
+.foot { margin-top:34px; padding-top:18px; border-top:1px solid var(--brd);
+  font-family:var(--mono); font-size:10.5px; color:var(--muted); letter-spacing:0.08em;
+  display:flex; gap:14px; flex-wrap:wrap; }
+.foot .ok { color:var(--green); }
+
+@media (max-width:820px) {
+  #sidebar { display:none; }
+  #main { margin-left:0; padding:54px 16px 60px; }
+}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+<div class="scanlines" aria-hidden="true"></div>
+<h2 class="sr-only">ONEPAI · GPT-2 Real Introspection: report di introspezione del modello gpt2.</h2>
+
+<header id="statusbar">
+  <span class="live-dot" aria-hidden="true"></span>
+  <span class="sb-brand">ONEPAI</span>
+  <span class="sb-sep">//</span>
+  <span class="sb-meta">neural observatory</span>
+  <span class="sb-sep">//</span>
+  <span class="sb-meta">target: gpt2</span>
+  <span id="clock">--:--:-- UTC</span>
+</header>
+
+<aside id="sidebar">
+  <div class="brand-block">
+    <span class="brand-glyph" aria-hidden="true">◈</span>
+    <div class="brand-name">ONEPAI</div>
+    <div class="brand-sub">INTROSPECTION v0.2</div>
+  </div>
+  <nav><a href="#ablation-sweep"><span class="nav-ix">01</span><span class="icon" aria-hidden="true">▽</span>Ablation sweep</a>
+<a href="#steering-sweep"><span class="nav-ix">02</span><span class="icon" aria-hidden="true">◈</span>Steering sweep</a>
+<a href="#suppressed-neurons-(gated-off)"><span class="nav-ix">03</span><span class="icon" aria-hidden="true">◌</span>Suppressed neurons (gated off)</a>
+<a href="#crushed-predictions-—-what-gpt-2"><span class="nav-ix">04</span><span class="icon" aria-hidden="true">◑</span>Crushed predictions — what GPT-2 almost said</a>
+<a href="#most-causal-attention-heads"><span class="nav-ix">05</span><span class="icon" aria-hidden="true">◉</span>Most causal attention heads</a></nav>
+</aside>
+
+<main id="main">
+  <div class="hero">
+    <h1>ONEPAI · GPT-2 Real Introspection</h1>
+    <div class="boot" id="boot" data-msg="initializing shadow map :: tracing silence :: target=gpt2 :: 5 modules online"></div>
+  </div>
+  <div class="cards"><div class="card "><span class="card-value" data-count="12.0" data-dec="0">0</span><div class="card-label">Layers</div><div class="card-corner">#01</div></div><div class="card "><span class="card-value" data-count="9.0" data-dec="0">0</span><div class="card-label">Suppressed neurons</div><div class="card-corner">#02</div></div><div class="card c-ok"><span class="card-value" data-count="20.0" data-dec="0">0</span><div class="card-label">Crushed tokens</div><div class="card-corner">#03</div></div><div class="card "><span class="card-value" data-count="144.0" data-dec="0">0</span><div class="card-label">Heads tested</div><div class="card-corner">#04</div></div></div>
+  
+<div class="section" id="ablation-sweep">
+  <div class="section-header">
+    <span class="sx">§01</span>
+    <span class="icon" aria-hidden="true">▽</span>
+    <h2>Ablation sweep</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">Cosa sottratta: azzero ogni componente e misuro l'effetto sul token che GPT-2 predice.</div>
+    <div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="152" height="422" font-family="ui-monospace, monospace" font-size="10">
+<text x="76" y="25" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">Effect on logit['the']</text>
+<text x="93" y="85" text-anchor="middle" transform="rotate(-45 93 85)" fill="#8493b8">attn</text>
+<text x="119" y="85" text-anchor="middle" transform="rotate(-45 119 85)" fill="#8493b8">mlp</text>
+<rect x="80" y="90" width="26" height="26" fill="#d25e3d" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>19.6496</title></rect>
+<text x="93" y="107" text-anchor="middle" fill="#e8eeff" font-size="8">19.65</text>
+<rect x="106" y="90" width="26" height="26" fill="#f2c1a9" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>6.8814</title></rect>
+<text x="119" y="107" text-anchor="middle" fill="#0a0f1c" font-size="8">6.88</text>
+<text x="75" y="107" text-anchor="end" fill="#9fb0d6">L0</text>
+<rect x="80" y="116" width="26" height="26" fill="#f2efed" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.4037</title></rect>
+<text x="93" y="133" text-anchor="middle" fill="#0a0f1c" font-size="8">0.40</text>
+<rect x="106" y="116" width="26" height="26" fill="#c5d9ee" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-4.6168</title></rect>
+<text x="119" y="133" text-anchor="middle" fill="#0a0f1c" font-size="8">-4.62</text>
+<text x="75" y="133" text-anchor="end" fill="#9fb0d6">L1</text>
+<rect x="80" y="142" width="26" height="26" fill="#f2dbd0" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>3.2221</title></rect>
+<text x="93" y="159" text-anchor="middle" fill="#0a0f1c" font-size="8">3.22</text>
+<rect x="106" y="142" width="26" height="26" fill="#dbe5f0" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-2.3371</title></rect>
+<text x="119" y="159" text-anchor="middle" fill="#0a0f1c" font-size="8">-2.34</text>
+<text x="75" y="159" text-anchor="end" fill="#9fb0d6">L2</text>
+<rect x="80" y="168" width="26" height="26" fill="#e7ecf1" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-1.0808</title></rect>
+<text x="93" y="185" text-anchor="middle" fill="#0a0f1c" font-size="8">-1.08</text>
+<rect x="106" y="168" width="26" height="26" fill="#d4e2ef" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-3.0756</title></rect>
+<text x="119" y="185" text-anchor="middle" fill="#0a0f1c" font-size="8">-3.08</text>
+<text x="75" y="185" text-anchor="end" fill="#9fb0d6">L3</text>
+<rect x="80" y="194" width="26" height="26" fill="#e8ecf1" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-1.0490</title></rect>
+<text x="93" y="211" text-anchor="middle" fill="#0a0f1c" font-size="8">-1.05</text>
+<rect x="106" y="194" width="26" height="26" fill="#f2eeec" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.5500</title></rect>
+<text x="119" y="211" text-anchor="middle" fill="#0a0f1c" font-size="8">0.55</text>
+<text x="75" y="211" text-anchor="end" fill="#9fb0d6">L4</text>
+<rect x="80" y="220" width="26" height="26" fill="#dde6f0" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-2.1871</title></rect>
+<text x="93" y="237" text-anchor="middle" fill="#0a0f1c" font-size="8">-2.19</text>
+<rect x="106" y="220" width="26" height="26" fill="#e5ebf1" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-1.3144</title></rect>
+<text x="119" y="237" text-anchor="middle" fill="#0a0f1c" font-size="8">-1.31</text>
+<text x="75" y="237" text-anchor="end" fill="#9fb0d6">L5</text>
+<rect x="80" y="246" width="26" height="26" fill="#eef0f1" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-0.3656</title></rect>
+<text x="93" y="263" text-anchor="middle" fill="#0a0f1c" font-size="8">-0.37</text>
+<rect x="106" y="246" width="26" height="26" fill="#f2dfd6" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>2.6060</title></rect>
+<text x="119" y="263" text-anchor="middle" fill="#0a0f1c" font-size="8">2.61</text>
+<text x="75" y="263" text-anchor="end" fill="#9fb0d6">L6</text>
+<rect x="80" y="272" width="26" height="26" fill="#d6e3ef" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-2.8680</title></rect>
+<text x="93" y="289" text-anchor="middle" fill="#0a0f1c" font-size="8">-2.87</text>
+<rect x="106" y="272" width="26" height="26" fill="#f2cbb8" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>5.4415</title></rect>
+<text x="119" y="289" text-anchor="middle" fill="#0a0f1c" font-size="8">5.44</text>
+<text x="75" y="289" text-anchor="end" fill="#9fb0d6">L7</text>
+<rect x="80" y="298" width="26" height="26" fill="#d3e1ef" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-3.1832</title></rect>
+<text x="93" y="315" text-anchor="middle" fill="#0a0f1c" font-size="8">-3.18</text>
+<rect x="106" y="298" width="26" height="26" fill="#f2f1f1" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>0.0855</title></rect>
+<text x="119" y="315" text-anchor="middle" fill="#0a0f1c" font-size="8">0.09</text>
+<text x="75" y="315" text-anchor="end" fill="#9fb0d6">L8</text>
+<rect x="80" y="324" width="26" height="26" fill="#dbe6f0" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-2.3046</title></rect>
+<text x="93" y="341" text-anchor="middle" fill="#0a0f1c" font-size="8">-2.30</text>
+<rect x="106" y="324" width="26" height="26" fill="#edeff1" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-0.5001</title></rect>
+<text x="119" y="341" text-anchor="middle" fill="#0a0f1c" font-size="8">-0.50</text>
+<text x="75" y="341" text-anchor="end" fill="#9fb0d6">L9</text>
+<rect x="80" y="350" width="26" height="26" fill="#dce6f0" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>-2.2109</title></rect>
+<text x="93" y="367" text-anchor="middle" fill="#0a0f1c" font-size="8">-2.21</text>
+<rect x="106" y="350" width="26" height="26" fill="#990c0c" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>28.9644</title></rect>
+<text x="119" y="367" text-anchor="middle" fill="#e8eeff" font-size="8">28.96</text>
+<text x="75" y="367" text-anchor="end" fill="#9fb0d6">L10</text>
+<rect x="80" y="376" width="26" height="26" fill="#d4613f" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>19.3758</title></rect>
+<text x="93" y="393" text-anchor="middle" fill="#e8eeff" font-size="8">19.38</text>
+<rect x="106" y="376" width="26" height="26" fill="#df7149" stroke="rgba(8,12,24,0.55)" stroke-width="0.6" rx="2"><title>17.5222</title></rect>
+<text x="119" y="393" text-anchor="middle" fill="#0a0f1c" font-size="8">17.52</text>
+<text x="75" y="393" text-anchor="end" fill="#9fb0d6">L11</text>
+</svg></div>
+  </div>
+</div>
+<div class="section" id="steering-sweep">
+  <div class="section-header">
+    <span class="sx">§02</span>
+    <span class="icon" aria-hidden="true">◈</span>
+    <h2>Steering sweep</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">Direzione aggiunta: inietto W_U[Paris] nel residual stream finale e guardo salire il logit del target.</div>
+    <div class="svg-wrap"><svg xmlns="http://www.w3.org/2000/svg" width="700" height="220" font-family="ui-monospace, monospace" font-size="11">
+<defs><filter id="lglow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="700" height="220" fill="none" rx="4"/>
+<text x="350" y="22" text-anchor="middle" font-size="13" font-weight="500" fill="#38e1ff" letter-spacing="0.05em">logit[Paris] vs coefficiente</text>
+<line x1="55" y1="40.0" x2="580" y2="40.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="44.0" text-anchor="end" fill="#7c89a8" font-size="9">-89.69</text>
+<line x1="55" y1="75.0" x2="580" y2="75.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="79.0" text-anchor="end" fill="#7c89a8" font-size="9">-93.97</text>
+<line x1="55" y1="110.0" x2="580" y2="110.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="114.0" text-anchor="end" fill="#7c89a8" font-size="9">-98.25</text>
+<line x1="55" y1="145.0" x2="580" y2="145.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="149.0" text-anchor="end" fill="#7c89a8" font-size="9">-102.53</text>
+<line x1="55" y1="180.0" x2="580" y2="180.0" stroke="rgba(120,165,255,0.12)" stroke-dasharray="3 4"/>
+<text x="50" y="184.0" text-anchor="end" fill="#7c89a8" font-size="9">-106.81</text>
+<line x1="55" y1="40" x2="55" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<line x1="55" y1="180" x2="580" y2="180" stroke="rgba(120,165,255,0.3)" stroke-width="1.2"/>
+<text x="13" y="110" text-anchor="middle" transform="rotate(-90 13 110)" fill="#8493b8" font-size="10">target logit</text>
+<text x="317" y="215" text-anchor="middle" fill="#8493b8" font-size="10">coefficient</text>
+<path d="M 55.0 180.0 L 142.5 157.3 L 230.0 134.3 L 317.5 111.0 L 405.0 87.5 L 492.5 63.9 L 580.0 40.0" fill="none" stroke="#38e1ff" stroke-width="2" opacity="0.95" filter="url(#lglow)"/>
+<circle cx="55.0" cy="180.0" r="3" fill="#38e1ff" opacity="0.7"><title>-> Paris: x=-4.00, y=-106.8057</title></circle>
+<circle cx="142.5" cy="157.3" r="3" fill="#38e1ff" opacity="0.7"><title>-> Paris: x=-2.00, y=-104.0257</title></circle>
+<circle cx="230.0" cy="134.3" r="3" fill="#38e1ff" opacity="0.7"><title>-> Paris: x=0.00, y=-101.2143</title></circle>
+<circle cx="317.5" cy="111.0" r="3" fill="#38e1ff" opacity="0.7"><title>-> Paris: x=2.00, y=-98.3732</title></circle>
+<circle cx="405.0" cy="87.5" r="3" fill="#38e1ff" opacity="0.7"><title>-> Paris: x=4.00, y=-95.5043</title></circle>
+<circle cx="492.5" cy="63.9" r="3" fill="#38e1ff" opacity="0.7"><title>-> Paris: x=6.00, y=-92.6098</title></circle>
+<circle cx="580.0" cy="40.0" r="3" fill="#38e1ff" opacity="0.7"><title>-> Paris: x=8.00, y=-89.6916</title></circle>
+<line x1="590" y1="46" x2="608" y2="46" stroke="#38e1ff" stroke-width="2"/>
+<text x="612" y="50" fill="#aeb9d6" font-size="9">-> Paris</text>
+</svg></div>
+  </div>
+</div>
+<div class="section" id="suppressed-neurons-(gated-off)">
+  <div class="section-header">
+    <span class="sx">§03</span>
+    <span class="icon" aria-hidden="true">◌</span>
+    <h2>Suppressed neurons (gated off)</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">Neuroni con pre-attivazione forte ma NEGATIVA: il modello li schiaccia attivamente con la GELU. Non morti — soppressi.</div>
+    <table><thead><tr><th>Neuron</th><th>Mean pre</th><th>|pre|</th><th>Fired %</th></tr></thead><tbody><tr><td>blocks.11.mlp.2378</td><td>-7.80</td><td>7.80</td><td>0.0</td></tr><tr><td>blocks.10.mlp.609</td><td>-5.41</td><td>5.41</td><td>0.0</td></tr><tr><td>blocks.2.mlp.2747</td><td>-5.21</td><td>5.21</td><td>0.0</td></tr><tr><td>blocks.3.mlp.2053</td><td>-4.78</td><td>4.78</td><td>0.0</td></tr><tr><td>blocks.2.mlp.2720</td><td>-4.59</td><td>4.59</td><td>0.0</td></tr><tr><td>blocks.0.mlp.1726</td><td>-4.47</td><td>4.47</td><td>0.0</td></tr><tr><td>blocks.10.mlp.2931</td><td>-4.44</td><td>4.44</td><td>0.0</td></tr><tr><td>blocks.11.mlp.3029</td><td>-4.19</td><td>4.19</td><td>0.0</td></tr><tr><td>blocks.11.mlp.2679</td><td>-4.18</td><td>4.18</td><td>0.0</td></tr></tbody></table>
+  </div>
+</div>
+<div class="section" id="crushed-predictions-—-what-gpt-2">
+  <div class="section-header">
+    <span class="sx">§04</span>
+    <span class="icon" aria-hidden="true">◑</span>
+    <h2>Crushed predictions — what GPT-2 almost said</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">Token che il logit lens vede salire strato dopo strato e poi schiacciare prima dell'output. Es: per 'France is' il modello considera ripetere 'France' e poi si trattiene.</div>
+    <table><thead><tr><th>Token</th><th>Peak layer</th><th>Peak prob</th><th>Final prob</th><th>Crush</th></tr></thead><tbody><tr><td>' happened'</td><td>7</td><td>1.00</td><td>0.000</td><td>1.00</td></tr><tr><td>' then'</td><td>4</td><td>0.95</td><td>0.002</td><td>0.95</td></tr><tr><td>' music'</td><td>9</td><td>0.92</td><td>0.000</td><td>0.92</td></tr><tr><td>' he'</td><td>10</td><td>0.73</td><td>0.007</td><td>0.72</td></tr><tr><td>' France'</td><td>9</td><td>0.62</td><td>0.000</td><td>0.62</td></tr><tr><td>' no'</td><td>10</td><td>0.60</td><td>0.006</td><td>0.59</td></tr><tr><td>' floor'</td><td>9</td><td>0.57</td><td>0.000</td><td>0.57</td></tr><tr><td>' same'</td><td>1</td><td>0.57</td><td>0.001</td><td>0.57</td></tr><tr><td>' few'</td><td>6</td><td>0.56</td><td>0.001</td><td>0.56</td></tr><tr><td>' now'</td><td>4</td><td>0.44</td><td>0.002</td><td>0.43</td></tr><tr><td>' the'</td><td>6</td><td>0.47</td><td>0.047</td><td>0.43</td></tr><tr><td>' happens'</td><td>2</td><td>0.38</td><td>0.000</td><td>0.38</td></tr><tr><td>' kind'</td><td>0</td><td>0.37</td><td>0.001</td><td>0.37</td></tr><tr><td>' greeted'</td><td>9</td><td>0.37</td><td>0.000</td><td>0.37</td></tr><tr><td>' entire'</td><td>6</td><td>0.33</td><td>0.000</td><td>0.33</td></tr></tbody></table>
+  </div>
+</div>
+<div class="section" id="most-causal-attention-heads">
+  <div class="section-header">
+    <span class="sx">§05</span>
+    <span class="icon" aria-hidden="true">◉</span>
+    <h2>Most causal attention heads</h2>
+    <span class="toggle">[-]</span>
+  </div>
+  <div class="section-body">
+    <div class="note">Teste il cui azzeramento sposta di piu' il logit della predizione.</div>
+    <table><thead><tr><th>Head</th><th>Effect</th></tr></thead><tbody><tr><td>L11 H8</td><td>+13.33</td></tr><tr><td>L0 H9</td><td>+13.27</td></tr><tr><td>L11 H11</td><td>+10.31</td></tr><tr><td>L0 H10</td><td>+10.10</td></tr><tr><td>L5 H1</td><td>+8.57</td></tr><tr><td>L2 H8</td><td>+6.60</td></tr><tr><td>L2 H0</td><td>+4.77</td></tr><tr><td>L0 H7</td><td>-4.75</td></tr><tr><td>L5 H9</td><td>+3.06</td></tr><tr><td>L1 H3</td><td>+2.85</td></tr><tr><td>L1 H10</td><td>-2.40</td></tr><tr><td>L0 H11</td><td>-2.29</td></tr></tbody></table>
+  </div>
+</div>
+  <div class="foot">
+    <span>ONEPAI <span class="ok">●</span> introspection engine</span>
+    <span>//</span><span>generated 2026-06-20 13:18:59</span>
+    <span>//</span><span>5 modules</span>
+  </div>
+</main>
+<script>
+(function(){
+  var c=document.getElementById('bg-canvas'); if(c){
+    var ctx=c.getContext('2d'), N=56, nodes=[], DPR=Math.min(window.devicePixelRatio||1,2);
+    function resize(){ c.width=innerWidth*DPR; c.height=innerHeight*DPR; ctx.setTransform(DPR,0,0,DPR,0,0); }
+    resize(); addEventListener('resize',resize);
+    for(var i=0;i<N;i++){ nodes.push({x:Math.random()*innerWidth,y:Math.random()*innerHeight,vx:(Math.random()-0.5)*0.28,vy:(Math.random()-0.5)*0.28}); }
+    function tick(){
+      ctx.clearRect(0,0,innerWidth,innerHeight);
+      for(var i=0;i<N;i++){ var n=nodes[i]; n.x+=n.vx; n.y+=n.vy;
+        if(n.x<0||n.x>innerWidth)n.vx*=-1; if(n.y<0||n.y>innerHeight)n.vy*=-1; }
+      for(var i=0;i<N;i++) for(var j=i+1;j<N;j++){
+        var a=nodes[i],b=nodes[j],dx=a.x-b.x,dy=a.y-b.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d<150){ ctx.strokeStyle='rgba(56,225,255,'+(0.11*(1-d/150))+')'; ctx.lineWidth=1;
+          ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); } }
+      for(var i=0;i<N;i++){ var n=nodes[i]; ctx.fillStyle='rgba(130,180,255,0.55)';
+        ctx.beginPath(); ctx.arc(n.x,n.y,1.5,0,6.2832); ctx.fill(); }
+      requestAnimationFrame(tick);
+    } tick();
+  }
+  function easeOut(t){ return 1-Math.pow(1-t,3); }
+  document.querySelectorAll('[data-count]').forEach(function(el){
+    var target=parseFloat(el.getAttribute('data-count')), dec=parseInt(el.getAttribute('data-dec')||'0',10), t0=null;
+    function step(ts){ if(!t0)t0=ts; var p=Math.min((ts-t0)/900,1);
+      el.textContent=(target*easeOut(p)).toFixed(dec); if(p<1)requestAnimationFrame(step); }
+    requestAnimationFrame(step);
+  });
+  var io=new IntersectionObserver(function(es){ es.forEach(function(e){
+    if(e.isIntersecting){ e.target.classList.add('visible'); io.unobserve(e.target); } }); },{threshold:0.06});
+  document.querySelectorAll('.section').forEach(function(s,i){ s.style.transitionDelay=((i%3)*70)+'ms'; io.observe(s); });
+  document.querySelectorAll('.section-header').forEach(function(h){
+    h.addEventListener('click',function(){ var b=h.nextElementSibling,t=h.querySelector('.toggle');
+      b.classList.toggle('collapsed'); if(t)t.textContent=b.classList.contains('collapsed')?'[+]':'[-]'; }); });
+  var secs=document.querySelectorAll('.section[id]'), navs=document.querySelectorAll('#sidebar nav a');
+  addEventListener('scroll',function(){ var y=scrollY;
+    secs.forEach(function(s){ var top=s.offsetTop-90, bot=top+s.offsetHeight;
+      if(y>=top&&y<bot) navs.forEach(function(a){ a.classList.toggle('active',a.getAttribute('href')==='#'+s.id); }); }); },{passive:true});
+  navs.forEach(function(a){ a.addEventListener('click',function(e){ var t=document.querySelector(a.getAttribute('href'));
+    if(t){ e.preventDefault(); t.scrollIntoView({behavior:'smooth',block:'start'}); } }); });
+  function clock(){ var el=document.getElementById('clock'); if(el) el.textContent=new Date().toISOString().slice(11,19)+' UTC'; }
+  clock(); setInterval(clock,1000);
+  var boot=document.getElementById('boot');
+  if(boot){ var msg=boot.getAttribute('data-msg')||'', i=0;
+    (function type(){ if(i<=msg.length){ boot.innerHTML=msg.slice(0,i)+'<span style="color:#3df5a6">_</span>'; i++; setTimeout(type,16); }
+      else boot.innerHTML=msg+' <span class="ok">[ ok ]</span>'; })(); }
+})();
+</script>
+</body>
+</html>
