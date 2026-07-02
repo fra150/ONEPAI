@@ -5,6 +5,9 @@
 onepaicosafatto.md
 vero.md
 
+# Exclude all markdown files from repo
+*.md
+
 # Python
 __pycache__/
 *.pyc
