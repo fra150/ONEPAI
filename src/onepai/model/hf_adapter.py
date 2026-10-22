@@ -132,6 +132,12 @@ class HFAdapter(ModelAdapter):
 
         # Hook di cattura su pre (up-proj), post (attivazione), out (down-proj)
         for i, blk in enumerate(self._blocks):
+            # resid_post(i) = output del blocco, catturato con un hook esplicito.
+            # NON usare out.hidden_states: in transformers 5.x l'ultima voce è
+            # già passata dalla norma finale (verificato: hs[-1] == norm(block[-1])),
+            # quindi il logit lens applicherebbe la norma due volte sull'ultimo layer.
+            handles.append(blk.register_forward_hook(
+                self._cap_hook(cache, HookPoint.resid_post(i))))
             pre = self._block_mod(blk, "mlp_pre")
             act = self._block_mod(blk, "mlp_act")
             mlp = self._block_mod(blk, "mlp")
@@ -145,6 +151,17 @@ class HFAdapter(ModelAdapter):
                 handles.append(mlp.register_forward_hook(
                     self._cap_hook(cache, HookPoint.mlp_out(i))))
 
+            # Uscita dell'attention e z per testa: indispensabili per la DLA
+            # (senza queste, la ricostruzione del logit perde tutta l'attenzione).
+            attn = self._block_mod(blk, "attn")
+            if attn is not None:
+                handles.append(attn.register_forward_hook(
+                    self._cap_hook(cache, HookPoint.attn_out(i))))
+            proj = self._block_mod(blk, "attn_out_proj")
+            if proj is not None:
+                handles.append(proj.register_forward_pre_hook(
+                    self._cap_z_hook(cache, i)))
+
         try:
             with torch.no_grad():
                 out = self.hf(ids, output_attentions=True,
@@ -153,11 +170,10 @@ class HFAdapter(ModelAdapter):
             for h in handles:
                 h.remove()
 
-        hidden = out.hidden_states          # (n_layers+1) x (1, seq, d)
-        cache[HookPoint.EMBED] = self._np(hidden[0][0])
-        for i in range(self._n_layers):
-            cache[HookPoint.resid_post(i)] = self._np(hidden[i + 1][0])
-            if out.attentions is not None and i < len(out.attentions):
+        if out.hidden_states is not None:
+            cache[HookPoint.EMBED] = self._np(out.hidden_states[0][0])
+        if out.attentions is not None:
+            for i in range(min(self._n_layers, len(out.attentions))):
                 cache[HookPoint.attn_pattern(i)] = self._np(out.attentions[i][0])  # (n_head, seq, seq)
         logits = self._np(out.logits[0])    # (seq, vocab)
         cache[HookPoint.LOGITS] = logits
@@ -167,6 +183,15 @@ class HFAdapter(ModelAdapter):
         def hook(module, inp, output):
             t = output[0] if isinstance(output, tuple) else output
             cache[name] = self._np(t[0])    # rimuove batch dim
+        return hook
+
+    def _cap_z_hook(self, cache: Dict[str, np.ndarray], layer: int):
+        """Cattura z (seq, n_heads, d_head) dall'input della proiezione O."""
+        def hook(module, args):
+            x = args[0]
+            seq = x.shape[1]
+            z = self._np(x[0]).reshape(seq, self._n_heads, self._d_head)
+            cache[HookPoint.attn_z(layer)] = z
         return hook
 
     # ------------------------------------------------------------------
@@ -267,6 +292,58 @@ class HFAdapter(ModelAdapter):
     def unembed_direction(self, token: int) -> np.ndarray:
         """Direzione di unembedding del token (riga dei pesi di unembed)."""
         return self._np(self._unembed.weight[token]).astype(np.float32)
+
+    # ------------------------------------------------------------------
+    # DLA / tuned lens
+    # ------------------------------------------------------------------
+
+    def unembed_matrix(self) -> np.ndarray:
+        """(d_model, vocab): trasposta dei pesi di unembedding."""
+        return self._np(self._unembed.weight).astype(np.float32).T
+
+    def final_norm_scale(self, resid: np.ndarray):
+        """
+        Scala elementwise della normalizzazione finale + tipo (con/senza media).
+
+        LayerNorm: scale = gamma / sqrt(var + eps), sottrae la media.
+        RMSNorm (llama/qwen): scale = gamma / rms, NON sottrae la media.
+        """
+        x = np.asarray(resid, dtype=np.float32)
+        norm = self._final_norm
+        if norm is None:
+            return np.ones_like(x), False
+        gamma = (self._np(norm.weight).astype(np.float32)
+                 if getattr(norm, "weight", None) is not None
+                 else np.ones(x.shape[-1], dtype=np.float32))
+        eps = float(getattr(norm, "eps", getattr(norm, "variance_epsilon", 1e-6)))
+        name = type(norm).__name__.lower()
+        if "rms" in name:
+            rms = np.sqrt((x * x).mean(axis=-1, keepdims=True) + eps)
+            return (gamma / rms).astype(np.float32), False
+        var = x.var(axis=-1, keepdims=True)
+        return (gamma / np.sqrt(var + eps)).astype(np.float32), True
+
+    def head_unembed(self, layer: int) -> Optional[np.ndarray]:
+        """(n_heads, d_head, d_model): la matrice O vista per testa."""
+        cached = getattr(self, "_head_unembed_cache", None)
+        if cached is None:
+            cached = {}
+            self._head_unembed_cache = cached
+        if layer in cached:
+            return cached[layer]
+
+        proj = self._block_mod(self._blocks[layer], "attn_out_proj")
+        if proj is None or getattr(proj, "weight", None) is None:
+            return None
+        W = self._np(proj.weight).astype(np.float32)
+        nh, dh, d = self._n_heads, self._d_head, self._d_model
+        # Conv1D (GPT-2) tiene (in, out); nn.Linear tiene (out, in).
+        W_io = W if type(proj).__name__ == "Conv1D" else W.T
+        if W_io.shape != (nh * dh, d):
+            return None
+        out = W_io.reshape(nh, dh, d)
+        cached[layer] = out
+        return out
 
     def __repr__(self) -> str:
         return (f"HFAdapter({self.model_name!r} [{self.model_type}]: {self._n_layers}L, "

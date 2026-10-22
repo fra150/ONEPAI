@@ -20,6 +20,7 @@ from typing import Callable, Dict, List, Optional, Sequence
 
 import numpy as np
 
+from .ablation import AblationController
 from .adapter import ModelAdapter, Intervention, HookPoint
 
 __all__ = ["InterventionEffect", "SteeringResponse",
@@ -126,8 +127,41 @@ class InterventionStudy:
         result.to_report().save("intervention.html")
     """
 
-    def __init__(self, model: ModelAdapter):
+    def __init__(
+        self,
+        model: ModelAdapter,
+        ablation: str = "zero",
+        controller: Optional[AblationController] = None,
+    ):
         self.model = model
+        self.ablation = ablation
+        self.controller = controller
+
+    @classmethod
+    def with_ablation(
+        cls,
+        model: ModelAdapter,
+        mode: str = "mean",
+        reference_batch: Optional[Sequence[np.ndarray]] = None,
+        donor_tokens: Optional[np.ndarray] = None,
+    ) -> "InterventionStudy":
+        """Study con ablazione in distribuzione (mean/resample) invece di zero."""
+        controller = AblationController.build(
+            model, mode=mode, reference_batch=reference_batch,
+            donor_tokens=donor_tokens)
+        return cls(model, ablation=mode, controller=controller)
+
+    def _controller(self, mode: Optional[str] = None,
+                    controller: Optional[AblationController] = None) -> AblationController:
+        mode = mode or self.ablation
+        ctrl = controller or self.controller
+        if ctrl is None:
+            if mode != "zero":
+                raise ValueError(
+                    f"mode={mode!r} richiede un AblationController: usa "
+                    "InterventionStudy.with_ablation(model, mode, reference_batch=...).")
+            ctrl = AblationController(self.model, mode="zero")
+        return ctrl
 
     # ------------------------------------------------------------------
 
@@ -140,14 +174,21 @@ class InterventionStudy:
         tokens,
         target_token: int,
         position: int = -1,
+        mode: Optional[str] = None,
+        controller: Optional[AblationController] = None,
     ) -> List[InterventionEffect]:
-        """Azzera MLP e attention di ogni layer; misura l'effetto sul target."""
+        """
+        Sostituisce MLP e attention di ogni layer; misura l'effetto sul target.
+
+        mode: "zero" (storico) | "mean" | "resample" — vedi AblationController.
+        """
         base = self.baseline_logit(tokens, target_token, position)
+        ctrl = self._controller(mode, controller)
         effects = []
         for i in range(self.model.n_layers):
             for kind, hook in (("attn", HookPoint.attn_out(i)), ("mlp", HookPoint.mlp_out(i))):
-                iv = Intervention(hook, kind="ablate")
-                logits = self.model.run_with_interventions(tokens, [iv])
+                logits = self.model.run_with_hooks(
+                    tokens, fwd_hooks=[(hook, ctrl.hook_for(hook))])
                 effect = float(logits[position, target_token]) - base
                 effects.append(InterventionEffect(
                     component=f"blocks.{i}.{kind}", kind="ablate", effect=effect))
@@ -158,13 +199,16 @@ class InterventionStudy:
         tokens,
         target_token: int,
         position: int = -1,
+        mode: Optional[str] = None,
+        controller: Optional[AblationController] = None,
     ) -> List[InterventionEffect]:
-        """Azzera il contributo z di ogni singola testa; misura l'effetto."""
+        """Sostituisce il contributo z di ogni singola testa; misura l'effetto."""
         base = self.baseline_logit(tokens, target_token, position)
+        ctrl = self._controller(mode, controller)
         effects = []
         for i in range(self.model.n_layers):
             for h in range(self.model.n_heads):
-                hook = (HookPoint.attn_z(i), _head_ablation_hook(h))
+                hook = (HookPoint.attn_z(i), ctrl.hook_for(HookPoint.attn_z(i), head=h))
                 logits = self.model.run_with_hooks(tokens, fwd_hooks=[hook])
                 effect = float(logits[position, target_token]) - base
                 effects.append(InterventionEffect(

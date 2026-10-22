@@ -1,0 +1,372 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B",
+  "args": {
+    "model": "Qwen/Qwen2.5-0.5B",
+    "fit_prompts": 60,
+    "prompts": 15,
+    "seq_len": 32,
+    "threshold": 0.2,
+    "alpha": 0.001,
+    "seed": 1,
+    "output": "reports/dla_tuned_lens.html",
+    "json": "reports/dla_tuned_lens.json",
+    "quick": false,
+    "open": false
+  },
+  "lens_fit": {
+    "layers_fitted": 24,
+    "d_model": 896,
+    "alpha": 0.001,
+    "mean_mse": 1.19328,
+    "rows": 1920
+  },
+  "kl_profile": {
+    "0": {
+      "raw_kl": 12.526690800984701,
+      "tuned_kl": 2.913860281308492,
+      "raw_top": 0.0,
+      "tuned_top": 0.3333333333333333
+    },
+    "1": {
+      "raw_kl": 12.543729146321615,
+      "tuned_kl": 2.1677125891049704,
+      "raw_top": 0.0,
+      "tuned_top": 0.3333333333333333
+    },
+    "2": {
+      "raw_kl": 11.881711641947428,
+      "tuned_kl": 2.457620143890381,
+      "raw_top": 0.0,
+      "tuned_top": 0.3333333333333333
+    },
+    "3": {
+      "raw_kl": 10.934611161549887,
+      "tuned_kl": 2.4878774881362915,
+      "raw_top": 0.0,
+      "tuned_top": 0.3333333333333333
+    },
+    "4": {
+      "raw_kl": 10.812008539835611,
+      "tuned_kl": 1.6535220742225647,
+      "raw_top": 0.0,
+      "tuned_top": 0.3333333333333333
+    },
+    "5": {
+      "raw_kl": 11.26385466257731,
+      "tuned_kl": 1.4322597483793895,
+      "raw_top": 0.0,
+      "tuned_top": 0.6666666666666666
+    },
+    "6": {
+      "raw_kl": 10.415913581848145,
+      "tuned_kl": 1.5363604823748271,
+      "raw_top": 0.0,
+      "tuned_top": 0.6666666666666666
+    },
+    "7": {
+      "raw_kl": 11.635114669799805,
+      "tuned_kl": 1.4195023775100708,
+      "raw_top": 0.0,
+      "tuned_top": 0.3333333333333333
+    },
+    "8": {
+      "raw_kl": 11.653367678324381,
+      "tuned_kl": 1.4409370223681133,
+      "raw_top": 0.0,
+      "tuned_top": 0.3333333333333333
+    },
+    "9": {
+      "raw_kl": 12.308972040812174,
+      "tuned_kl": 1.2039418816566467,
+      "raw_top": 0.0,
+      "tuned_top": 0.3333333333333333
+    },
+    "10": {
+      "raw_kl": 12.439752260843912,
+      "tuned_kl": 1.1775745650132496,
+      "raw_top": 0.0,
+      "tuned_top": 0.3333333333333333
+    },
+    "11": {
+      "raw_kl": 10.904116948445639,
+      "tuned_kl": 1.2707523107528687,
+      "raw_top": 0.0,
+      "tuned_top": 0.3333333333333333
+    },
+    "12": {
+      "raw_kl": 9.057271480560303,
+      "tuned_kl": 1.1867444217205048,
+      "raw_top": 0.0,
+      "tuned_top": 0.3333333333333333
+    },
+    "13": {
+      "raw_kl": 9.339182535807291,
+      "tuned_kl": 1.1871095895767212,
+      "raw_top": 0.0,
+      "tuned_top": 0.3333333333333333
+    },
+    "14": {
+      "raw_kl": 9.233027776082357,
+      "tuned_kl": 0.9523058732350668,
+      "raw_top": 0.0,
+      "tuned_top": 0.3333333333333333
+    },
+    "15": {
+      "raw_kl": 7.77349837621053,
+      "tuned_kl": 0.8655832707881927,
+      "raw_top": 0.0,
+      "tuned_top": 0.3333333333333333
+    },
+    "16": {
+      "raw_kl": 8.189760208129883,
+      "tuned_kl": 0.8441097239653269,
+      "raw_top": 0.0,
+      "tuned_top": 0.6666666666666666
+    },
+    "17": {
+      "raw_kl": 8.46109390258789,
+      "tuned_kl": 0.7399698942899704,
+      "raw_top": 0.0,
+      "tuned_top": 0.6666666666666666
+    },
+    "18": {
+      "raw_kl": 6.808869361877441,
+      "tuned_kl": 0.6380061308542887,
+      "raw_top": 0.0,
+      "tuned_top": 0.6666666666666666
+    },
+    "19": {
+      "raw_kl": 6.641486485799153,
+      "tuned_kl": 0.33866321792205173,
+      "raw_top": 0.0,
+      "tuned_top": 0.6666666666666666
+    },
+    "20": {
+      "raw_kl": 4.484915256500244,
+      "tuned_kl": 0.24736912548542023,
+      "raw_top": 0.0,
+      "tuned_top": 1.0
+    },
+    "21": {
+      "raw_kl": 3.642092744509379,
+      "tuned_kl": 0.28692500044902164,
+      "raw_top": 0.0,
+      "tuned_top": 1.0
+    },
+    "22": {
+      "raw_kl": 0.8502336541811625,
+      "tuned_kl": 0.15245889872312546,
+      "raw_top": 0.3333333333333333,
+      "tuned_top": 0.6666666666666666
+    },
+    "23": {
+      "raw_kl": -9.486211875279575e-08,
+      "tuned_kl": -9.486211875279575e-08,
+      "raw_top": 1.0,
+      "tuned_top": 1.0
+    }
+  },
+  "reference": {
+    "token": " ____",
+    "crush": 0.46655720472335815,
+    "peak_layer": 21,
+    "against": [
+      [
+        "blocks.22.mlp",
+        -0.777
+      ],
+      [
+        "blocks.12.mlp",
+        -0.522
+      ],
+      [
+        "blocks.10.head.7",
+        -0.254
+      ],
+      [
+        "blocks.19.head.8",
+        -0.233
+      ],
+      [
+        "blocks.17.head.2",
+        -0.214
+      ],
+      [
+        "blocks.12.head.0",
+        -0.196
+      ],
+      [
+        "blocks.8.head.3",
+        -0.187
+      ],
+      [
+        "blocks.4.mlp",
+        -0.168
+      ]
+    ],
+    "for": [
+      [
+        "blocks.20.mlp",
+        4.795
+      ],
+      [
+        "blocks.15.mlp",
+        2.541
+      ],
+      [
+        "blocks.23.mlp",
+        2.128
+      ],
+      [
+        "blocks.21.mlp",
+        1.166
+      ],
+      [
+        "blocks.14.mlp",
+        0.791
+      ]
+    ],
+    "dla_top_mlp": "blocks.22.mlp"
+  },
+  "comparison": {
+    "rate_zero": 0.18181818181818182,
+    "rate_mean": 0.18181818181818182,
+    "spearman_zero": -0.1367376650646147,
+    "spearman_mean": -0.033605154904975024,
+    "considered": 11,
+    "rows": [
+      {
+        "Prompt": ", an organ was introduced into rel…",
+        "Token": "' and'",
+        "Crush": "0.38@L3",
+        "DLA (contro)": "blocks.7.mlp",
+        "Chief zero": "blocks.7.mlp",
+        "Chief mean": "blocks.7.mlp",
+        "Z": "✓",
+        "M": "✓",
+        "ρ Z": "-0.45",
+        "ρ M": "-0.46"
+      },
+      {
+        "Prompt": "interview on BBC4 's Synth Britann…",
+        "Token": "','",
+        "Crush": "0.44@L2",
+        "DLA (contro)": "blocks.2.mlp",
+        "Chief zero": "blocks.3.mlp",
+        "Chief mean": "blocks.2.mlp",
+        "Z": "✗",
+        "M": "✓",
+        "ρ Z": "-0.33",
+        "ρ M": "-0.30"
+      },
+      {
+        "Prompt": "Cornish , and as many as 2 @,@ 180…",
+        "Token": "' '",
+        "Crush": "0.68@L2",
+        "DLA (contro)": "blocks.7.mlp",
+        "Chief zero": "blocks.17.mlp",
+        "Chief mean": "blocks.17.mlp",
+        "Z": "✗",
+        "M": "✗",
+        "ρ Z": "+0.01",
+        "ρ M": "+0.21"
+      },
+      {
+        "Prompt": "America . Although it is primarily…",
+        "Token": "' the'",
+        "Crush": "0.78@L5",
+        "DLA (contro)": "blocks.6.mlp",
+        "Chief zero": "blocks.20.mlp",
+        "Chief mean": "blocks.20.mlp",
+        "Z": "✗",
+        "M": "✗",
+        "ρ Z": "-0.22",
+        "ρ M": "+0.03"
+      },
+      {
+        "Prompt": ", and continued emphasis on higher…",
+        "Token": "'iers'",
+        "Crush": "0.72@L18",
+        "DLA (contro)": "blocks.21.mlp",
+        "Chief zero": "blocks.21.mlp",
+        "Chief mean": "blocks.18.mlp",
+        "Z": "✓",
+        "M": "✗",
+        "ρ Z": "-0.43",
+        "ρ M": "-0.14"
+      },
+      {
+        "Prompt": "ography ) is a pre @-@ Columbian a…",
+        "Token": "' of'",
+        "Crush": "0.76@L1",
+        "DLA (contro)": "blocks.11.mlp",
+        "Chief zero": "blocks.2.mlp",
+        "Chief mean": "blocks.16.mlp",
+        "Z": "✗",
+        "M": "✗",
+        "ρ Z": "-0.03",
+        "ρ M": "+0.05"
+      },
+      {
+        "Prompt": "such as what happened when vehicle…",
+        "Token": "' '",
+        "Crush": "0.21@L3",
+        "DLA (contro)": "blocks.9.mlp",
+        "Chief zero": "blocks.8.mlp",
+        "Chief mean": "blocks.22.mlp",
+        "Z": "✗",
+        "M": "✗",
+        "ρ Z": "-0.13",
+        "ρ M": "-0.00"
+      },
+      {
+        "Prompt": "1979 ) was a twentieth @-@ century…",
+        "Token": "' and'",
+        "Crush": "0.63@L4",
+        "DLA (contro)": "blocks.14.mlp",
+        "Chief zero": "blocks.4.mlp",
+        "Chief mean": "blocks.6.mlp",
+        "Z": "✗",
+        "M": "✗",
+        "ρ Z": "+0.00",
+        "ρ M": "-0.16"
+      },
+      {
+        "Prompt": "Gaga was able to sell the songs fr…",
+        "Token": "' the'",
+        "Crush": "0.56@L12",
+        "DLA (contro)": "blocks.15.mlp",
+        "Chief zero": "blocks.22.mlp",
+        "Chief mean": "blocks.23.mlp",
+        "Z": "✗",
+        "M": "✗",
+        "ρ Z": "+0.57",
+        "ρ M": "+0.64"
+      },
+      {
+        "Prompt": "by Northern Chinese opera . Guanba…",
+        "Token": "' the'",
+        "Crush": "0.50@L6",
+        "DLA (contro)": "blocks.6.mlp",
+        "Chief zero": "blocks.16.mlp",
+        "Chief mean": "blocks.20.mlp",
+        "Z": "✗",
+        "M": "✗",
+        "ρ Z": "+0.17",
+        "ρ M": "+0.14"
+      },
+      {
+        "Prompt": "'s review and an exchange with cri…",
+        "Token": "' the'",
+        "Crush": "0.77@L6",
+        "DLA (contro)": "blocks.7.mlp",
+        "Chief zero": "blocks.6.mlp",
+        "Chief mean": "blocks.6.mlp",
+        "Z": "✗",
+        "M": "✗",
+        "ρ Z": "-0.66",
+        "ρ M": "-0.38"
+      }
+    ]
+  }
+}

@@ -26,7 +26,13 @@ from .absence import (
 from .intervention_study import (
     InterventionStudy, InterventionStudyResult, InterventionEffect, SteeringResponse,
 )
-from .suppression import SuppressionTracer, SuppressionTrace, Suppressor
+from .ablation import (
+    AblationController, ABLATION_MODES, compute_mean_activations, default_ablation_hooks,
+)
+from .suppression import (
+    SuppressionTracer, SuppressionTrace, Suppressor, CrushProfile,
+)
+from .null_model import NullModelStudy, NullModelResult, PromptRecord
 from .validation import SuppressionValidator, ValidationCase, ValidationResult
 
 # HFAdapter è opzionale: richiede torch + transformers.
@@ -44,7 +50,10 @@ __all__ = [
     "ModelInstrumentor", "InstrumentationResult",
     "AbsenceEngine", "AbsenceReport", "NeuronAbsence", "CrushedToken", "AbortedDirection",
     "InterventionStudy", "InterventionStudyResult", "InterventionEffect", "SteeringResponse",
-    "SuppressionTracer", "SuppressionTrace", "Suppressor",
+    "AblationController", "ABLATION_MODES", "compute_mean_activations",
+    "default_ablation_hooks",
+    "SuppressionTracer", "SuppressionTrace", "Suppressor", "CrushProfile",
+    "NullModelStudy", "NullModelResult", "PromptRecord",
     "SuppressionValidator", "ValidationCase", "ValidationResult",
     "HFAdapter",
 ]

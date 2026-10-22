@@ -18,6 +18,8 @@ from .activation_patch import PatchResult, ActivationPatcher
 from .token_influence import TokenInfluenceMap, TokenInfluencer
 from .residual_stream import ResidualComponent, ResidualStreamAnalyzer
 from .feature_attribution import Attribution, FeatureAttributor
+from .dla import DLAContribution, DLAResult, DirectLogitAttributor
+from .tuned_lens import LayerLensFit, RidgeTunedLens
 
 __all__ = [
     "AttentionRecord", "AttentionTracer", "HeadSummary",
@@ -27,4 +29,6 @@ __all__ = [
     "TokenInfluenceMap", "TokenInfluencer",
     "ResidualComponent", "ResidualStreamAnalyzer",
     "Attribution", "FeatureAttributor",
+    "DLAContribution", "DLAResult", "DirectLogitAttributor",
+    "LayerLensFit", "RidgeTunedLens",
 ]

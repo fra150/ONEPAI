@@ -219,6 +219,21 @@ class TinyTransformer(ModelAdapter):
         normed = layer_norm(resid, self.lnf_g, self.lnf_b)
         return normed @ self.W_U
 
+    # -- DLA / tuned lens -----------------------------------------------
+
+    def unembed_matrix(self) -> np.ndarray:
+        return self.W_U
+
+    def final_norm_scale(self, resid: np.ndarray):
+        """LayerNorm finale: scala = gamma / std, sottrae la media."""
+        x = np.asarray(resid, dtype=np.float32)
+        var = x.var(axis=-1, keepdims=True)
+        return (self.lnf_g / np.sqrt(var + 1e-5)).astype(np.float32), True
+
+    def head_unembed(self, layer: int) -> Optional[np.ndarray]:
+        """W_O per testa: (n_heads, d_head, d_model)."""
+        return np.asarray(self.blocks[layer]["W_O"], dtype=np.float32)
+
     def random_tokens(self, seq_len: int = 16, seed: Optional[int] = None) -> np.ndarray:
         rng = np.random.RandomState(seed if seed is not None else self.cfg.seed + 1)
         return rng.randint(0, self.cfg.vocab_size, size=seq_len)

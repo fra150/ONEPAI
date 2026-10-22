@@ -309,10 +309,33 @@ class ModelAdapter(ABC):
 
     def unembed_direction(self, token: int) -> Optional[np.ndarray]:
         """Direzione di unembedding del token (per lo steering verso quel token)."""
-        W_U = getattr(self, "W_U", None)
+        W_U = self.unembed_matrix()
         if W_U is None:
             return None
         return np.asarray(W_U[:, token], dtype=np.float32)
+
+    # -- attribuzione diretta (DLA) e tuned lens -------------------------
+
+    def unembed_matrix(self) -> Optional[np.ndarray]:
+        """Matrice di unembedding (d_model, vocab), o None se non esposta."""
+        W_U = getattr(self, "W_U", None)
+        if W_U is None or not isinstance(W_U, np.ndarray):
+            return None
+        return W_U if W_U.shape[0] == self.d_model else W_U.T
+
+    def final_norm_scale(self, resid: np.ndarray):
+        """
+        Scala elementwise (seq, d) applicata dalla normalizzazione finale, e se
+        questa sottrae la media (LayerNorm) o no (RMSNorm).
+
+        Serve alla Direct Logit Attribution: la linearizzazione della norma
+        finale è ciò che rende confrontabili i contributi dei componenti.
+        """
+        return None, True
+
+    def head_unembed(self, layer: int) -> Optional[np.ndarray]:
+        """(n_heads, d_head, d_model): come ogni testa scrive nel residual stream."""
+        return None
 
     def hook_names(self) -> List[str]:
         """Elenco dei nomi di hook disponibili (best-effort)."""
